@@ -8,14 +8,14 @@ set -uo pipefail
 OUT=${1:?outdir}; mkdir -p "$OUT"
 PORT=5299
 IPERF="nix shell nixpkgs#iperf3 -c iperf3"
-log "LAN peer load: $(ssh "${SSH_OPTS[@]}" "$LAN_PEER" uptime)"
+log "LAN peer load: $(ssh "${PEER_SSH_OPTS[@]}" "$LAN_PEER" uptime)"
 for spec in ${LAN_RUNS:-fwd:1 fwd:4 rev:1 rev:4}; do
   dir=${spec%%:*}; n=${spec##*:}; flag=; [ "$dir" = rev ] && flag=-R
   iperf3 -s -B "$WIFI_IP" -p $PORT -1 >/dev/null 2>&1 & srv=$!
   sleep 1
   log "LAN->LAN2 $dir x$n ${DUR}s"
   t0=$(now)
-  ssh "${SSH_OPTS[@]}" "$LAN_PEER" "$IPERF -c $WIFI_IP -p $PORT -t $DUR -P $n $flag -J" > "$OUT/.iperf.json" 2>/dev/null
+  ssh "${PEER_SSH_OPTS[@]}" "$LAN_PEER" "$IPERF -c $WIFI_IP -p $PORT -t $DUR -P $n $flag -J" > "$OUT/.iperf.json" 2>/dev/null
   t1=$(now); kill $srv 2>/dev/null; wait $srv 2>/dev/null
   python3 - "$dir" "$n" "$t0" "$t1" "$OUT/.iperf.json" >> "$OUT/lan.jsonl" <<'PY'
 import json,sys

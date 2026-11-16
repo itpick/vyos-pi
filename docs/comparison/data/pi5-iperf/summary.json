@@ -36,7 +36,10 @@
     "wan_nic_tx_mbps_max": 30,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.3,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.3,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -75,7 +78,10 @@
     "wan_nic_tx_mbps_max": 993,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -114,7 +120,10 @@
     "wan_nic_tx_mbps_max": 30,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -153,7 +162,10 @@
     "wan_nic_tx_mbps_max": 988,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -195,7 +207,10 @@
     "wan_nic_tx_mbps_max": 2,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -237,7 +252,10 @@
     "wan_nic_tx_mbps_max": 993,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.5,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   }
  ],
@@ -278,7 +296,10 @@
     "wan_nic_tx_mbps_max": 32,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -317,7 +338,10 @@
     "wan_nic_tx_mbps_max": 985,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.5,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -356,7 +380,10 @@
     "wan_nic_tx_mbps_max": 30,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -395,7 +422,10 @@
     "wan_nic_tx_mbps_max": 993,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.4,
-    "suricata_rss_mb": 86
+    "suricata_rss_mb": 86,
+    "suricata_cpu_avg_pct": 0.4,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   }
  ],
@@ -436,7 +466,10 @@
     "wan_nic_tx_mbps_max": 16,
     "wan_nic_idrops": 8,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -475,7 +508,10 @@
     "wan_nic_tx_mbps_max": 953,
     "wan_nic_idrops": 9,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -514,7 +550,10 @@
     "wan_nic_tx_mbps_max": 17,
     "wan_nic_idrops": 8,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -553,7 +592,10 @@
     "wan_nic_tx_mbps_max": 957,
     "wan_nic_idrops": 11,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -595,7 +637,10 @@
     "wan_nic_tx_mbps_max": 0,
     "wan_nic_idrops": 10,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -637,7 +682,10 @@
     "wan_nic_tx_mbps_max": 1007,
     "wan_nic_idrops": 8,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   }
  ],
@@ -678,7 +726,10 @@
     "wan_nic_tx_mbps_max": 16,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -717,7 +768,10 @@
     "wan_nic_tx_mbps_max": 952,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -756,7 +810,10 @@
     "wan_nic_tx_mbps_max": 16,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -795,7 +852,10 @@
     "wan_nic_tx_mbps_max": 960,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -837,7 +897,10 @@
     "wan_nic_tx_mbps_max": 0,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -879,7 +942,10 @@
     "wan_nic_tx_mbps_max": 2012,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   }
  ],
@@ -920,7 +986,10 @@
     "wan_nic_tx_mbps_max": 16,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -959,7 +1028,10 @@
     "wan_nic_tx_mbps_max": 957,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -998,7 +1070,10 @@
     "wan_nic_tx_mbps_max": 17,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   },
   {
@@ -1037,7 +1112,10 @@
     "wan_nic_tx_mbps_max": 959,
     "wan_nic_idrops": 0,
     "suricata_cpu_max_pct": 0.0,
-    "suricata_rss_mb": 0
+    "suricata_rss_mb": 0,
+    "suricata_cpu_avg_pct": 0.0,
+    "ntopng_cpu_avg_pct": 0.0,
+    "ntopng_rss_mb": 0
    }
   }
  ],
@@ -1161,6 +1239,526 @@
     "remote_system": 6.66165974615233
    },
    "router": {}
+  }
+ ],
+ "vyos-live-lan-eth2": [
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794865802,
+   "t1": 1794865818,
+   "recv_mbps": 910.8,
+   "sent_mbps": 912.1,
+   "retransmits": 0,
+   "cpu_local": {
+    "host_total": 32.2014970980546,
+    "host_user": 1.1656366158956737,
+    "host_system": 31.035860482158927,
+    "remote_total": 3.3362720449199563,
+    "remote_user": 0.05169021469038034,
+    "remote_system": 3.2845751639651075
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     65,
+     24,
+     24,
+     25
+    ],
+    "cpu_avg_total": 34.7,
+    "cpu_max_core": 69,
+    "intr_avg_total": 14.7,
+    "load1_max": 0.92,
+    "temp_max_c": 60.05,
+    "temp_avg_c": 58.8,
+    "mem_free_min_mb": 13060,
+    "wan_nic_rx_mbps_max": 1011,
+    "wan_nic_tx_mbps_max": 14,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 4.5,
+    "suricata_rss_mb": 1229,
+    "suricata_cpu_avg_pct": 3.9,
+    "ntopng_cpu_avg_pct": 52.1,
+    "ntopng_rss_mb": 434
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794865824,
+   "t1": 1794865839,
+   "recv_mbps": 911.1,
+   "sent_mbps": 912.9,
+   "retransmits": 45,
+   "cpu_local": {
+    "host_total": 7.186089206063873,
+    "host_user": 0.10876138648874205,
+    "host_system": 7.07733448428415,
+    "remote_total": 8.866200211432036,
+    "remote_user": 0.26179362865514016,
+    "remote_system": 8.604406582776896
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     56,
+     24,
+     29,
+     26
+    ],
+    "cpu_avg_total": 33.9,
+    "cpu_max_core": 79,
+    "intr_avg_total": 10.6,
+    "load1_max": 0.77,
+    "temp_max_c": 61.15,
+    "temp_avg_c": 58.7,
+    "mem_free_min_mb": 12771,
+    "wan_nic_rx_mbps_max": 7,
+    "wan_nic_tx_mbps_max": 1050,
+    "wan_nic_idrops": 30,
+    "suricata_cpu_max_pct": 9.0,
+    "suricata_rss_mb": 1229,
+    "suricata_cpu_avg_pct": 5.4,
+    "ntopng_cpu_avg_pct": 55.9,
+    "ntopng_rss_mb": 435
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 4,
+   "t0": 1794865845,
+   "t1": 1794865860,
+   "recv_mbps": 861.8,
+   "sent_mbps": 863.3,
+   "retransmits": 663,
+   "cpu_local": {
+    "host_total": 34.29731010360835,
+    "host_user": 1.6977379330877254,
+    "host_system": 32.599572170520624,
+    "remote_total": 6.23350030601993,
+    "remote_user": 0.06084400169939223,
+    "remote_system": 6.172656304320538
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     64,
+     25,
+     25,
+     28
+    ],
+    "cpu_avg_total": 35.3,
+    "cpu_max_core": 68,
+    "intr_avg_total": 14.3,
+    "load1_max": 1.01,
+    "temp_max_c": 60.6,
+    "temp_avg_c": 59.6,
+    "mem_free_min_mb": 12777,
+    "wan_nic_rx_mbps_max": 960,
+    "wan_nic_tx_mbps_max": 18,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 4.0,
+    "suricata_rss_mb": 1230,
+    "suricata_cpu_avg_pct": 3.6,
+    "ntopng_cpu_avg_pct": 49.1,
+    "ntopng_rss_mb": 436
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 4,
+   "t0": 1794865866,
+   "t1": 1794865882,
+   "recv_mbps": 927.4,
+   "sent_mbps": 931.1,
+   "retransmits": 500,
+   "cpu_local": {
+    "host_total": 6.192209575588962,
+    "host_user": 0.23490655579398856,
+    "host_system": 5.95730968324364,
+    "remote_total": 17.455214674524218,
+    "remote_user": 0.44808989848584013,
+    "remote_system": 17.0071447740999
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     51,
+     19,
+     23,
+     15
+    ],
+    "cpu_avg_total": 27.0,
+    "cpu_max_core": 67,
+    "intr_avg_total": 9.1,
+    "load1_max": 0.96,
+    "temp_max_c": 60.6,
+    "temp_avg_c": 59.6,
+    "mem_free_min_mb": 13035,
+    "wan_nic_rx_mbps_max": 10,
+    "wan_nic_tx_mbps_max": 1040,
+    "wan_nic_idrops": 32,
+    "suricata_cpu_max_pct": 4.5,
+    "suricata_rss_mb": 1230,
+    "suricata_cpu_avg_pct": 4.1,
+    "ntopng_cpu_avg_pct": 57.4,
+    "ntopng_rss_mb": 437
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794865888,
+   "t1": 1794865903,
+   "sent_mbps": 961.7,
+   "recv_mbps": 951.7,
+   "jitter_ms": 0.024,
+   "lost_pct": 0.72,
+   "lost": 8949,
+   "packets": 1241288,
+   "cpu_local": {
+    "host_total": 34.022008650039936,
+    "host_user": 5.70030234152229,
+    "host_system": 28.321712973160484,
+    "remote_total": 97.7924881974359,
+    "remote_user": 19.155885842616215,
+    "remote_system": 78.6366023548197
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     48,
+     20,
+     19,
+     24
+    ],
+    "cpu_avg_total": 27.7,
+    "cpu_max_core": 54,
+    "intr_avg_total": 8.1,
+    "load1_max": 0.96,
+    "temp_max_c": 61.15,
+    "temp_avg_c": 59.5,
+    "mem_free_min_mb": 13023,
+    "wan_nic_rx_mbps_max": 1037,
+    "wan_nic_tx_mbps_max": 4,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 4.0,
+    "suricata_rss_mb": 1236,
+    "suricata_cpu_avg_pct": 3.4,
+    "ntopng_cpu_avg_pct": 40.4,
+    "ntopng_rss_mb": 437
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794865909,
+   "t1": 1794865925,
+   "sent_mbps": 925.4,
+   "recv_mbps": 922.3,
+   "jitter_ms": 0.022,
+   "lost_pct": 0.32,
+   "lost": 3862,
+   "packets": 1198289,
+   "cpu_local": {
+    "host_total": 59.38587814248195,
+    "host_user": 5.794244123500036,
+    "host_system": 53.591640682341335,
+    "remote_total": 7.192014269546333,
+    "remote_user": 1.7214926709123872,
+    "remote_system": 5.470521598633947
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     41,
+     43,
+     29,
+     35
+    ],
+    "cpu_avg_total": 36.8,
+    "cpu_max_core": 63,
+    "intr_avg_total": 3.8,
+    "load1_max": 0.88,
+    "temp_max_c": 61.15,
+    "temp_avg_c": 60.1,
+    "mem_free_min_mb": 13036,
+    "wan_nic_rx_mbps_max": 3,
+    "wan_nic_tx_mbps_max": 1030,
+    "wan_nic_idrops": 29,
+    "suricata_cpu_max_pct": 5.0,
+    "suricata_rss_mb": 1238,
+    "suricata_cpu_avg_pct": 3.9,
+    "ntopng_cpu_avg_pct": 49.0,
+    "ntopng_rss_mb": 441
+   }
+  }
+ ],
+ "vyos-live-lan-eth2-repeat": [
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794865972,
+   "t1": 1794865988,
+   "recv_mbps": 916.2,
+   "sent_mbps": 917.5,
+   "retransmits": 0,
+   "cpu_local": {
+    "host_total": 30.09066515498109,
+    "host_user": 1.0733314090791217,
+    "host_system": 29.017333745901965,
+    "remote_total": 3.525900844446672,
+    "remote_user": 0.053677881512942956,
+    "remote_system": 3.472182964512334
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     62,
+     29,
+     30,
+     29
+    ],
+    "cpu_avg_total": 37.9,
+    "cpu_max_core": 66,
+    "intr_avg_total": 13.6,
+    "load1_max": 0.74,
+    "temp_max_c": 61.15,
+    "temp_avg_c": 59.3,
+    "mem_free_min_mb": 13039,
+    "wan_nic_rx_mbps_max": 1028,
+    "wan_nic_tx_mbps_max": 14,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 4.5,
+    "suricata_rss_mb": 1238,
+    "suricata_cpu_avg_pct": 3.9,
+    "ntopng_cpu_avg_pct": 69.6,
+    "ntopng_rss_mb": 442
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794865994,
+   "t1": 1794866009,
+   "recv_mbps": 923.1,
+   "sent_mbps": 924.7,
+   "retransmits": 62,
+   "cpu_local": {
+    "host_total": 6.05277153429786,
+    "host_user": 0.15888947536956613,
+    "host_system": 5.893882058928293,
+    "remote_total": 8.86261939045748,
+    "remote_user": 0.2578339931445581,
+    "remote_system": 8.604805395295795
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     48,
+     17,
+     19,
+     16
+    ],
+    "cpu_avg_total": 25.0,
+    "cpu_max_core": 52,
+    "intr_avg_total": 8.3,
+    "load1_max": 0.71,
+    "temp_max_c": 59.5,
+    "temp_avg_c": 59.0,
+    "mem_free_min_mb": 13027,
+    "wan_nic_rx_mbps_max": 7,
+    "wan_nic_tx_mbps_max": 1034,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 5.0,
+    "suricata_rss_mb": 1238,
+    "suricata_cpu_avg_pct": 3.8,
+    "ntopng_cpu_avg_pct": 52.8,
+    "ntopng_rss_mb": 442
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 4,
+   "t0": 1794866015,
+   "t1": 1794866031,
+   "recv_mbps": 870.7,
+   "sent_mbps": 872.1,
+   "retransmits": 449,
+   "cpu_local": {
+    "host_total": 34.833152534689056,
+    "host_user": 1.780601794633928,
+    "host_system": 33.05255740298655,
+    "remote_total": 7.29736861263163,
+    "remote_user": 0.0629266834471156,
+    "remote_system": 7.234441929184514
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     60,
+     26,
+     22,
+     30
+    ],
+    "cpu_avg_total": 34.4,
+    "cpu_max_core": 71,
+    "intr_avg_total": 13.4,
+    "load1_max": 0.82,
+    "temp_max_c": 60.6,
+    "temp_avg_c": 60.1,
+    "mem_free_min_mb": 13033,
+    "wan_nic_rx_mbps_max": 977,
+    "wan_nic_tx_mbps_max": 20,
+    "wan_nic_idrops": 32,
+    "suricata_cpu_max_pct": 4.5,
+    "suricata_rss_mb": 1238,
+    "suricata_cpu_avg_pct": 3.6,
+    "ntopng_cpu_avg_pct": 50.6,
+    "ntopng_rss_mb": 442
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 4,
+   "t0": 1794866037,
+   "t1": 1794866052,
+   "recv_mbps": 928.3,
+   "sent_mbps": 933.1,
+   "retransmits": 675,
+   "cpu_local": {
+    "host_total": 6.9766219406825245,
+    "host_user": 0.1609477194398369,
+    "host_system": 6.815674221242688,
+    "remote_total": 17.286624334597818,
+    "remote_user": 0.455327277146349,
+    "remote_system": 16.8312770588887
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     57,
+     20,
+     24,
+     21
+    ],
+    "cpu_avg_total": 30.4,
+    "cpu_max_core": 73,
+    "intr_avg_total": 9.9,
+    "load1_max": 0.96,
+    "temp_max_c": 61.7,
+    "temp_avg_c": 60.1,
+    "mem_free_min_mb": 13024,
+    "wan_nic_rx_mbps_max": 10,
+    "wan_nic_tx_mbps_max": 1046,
+    "wan_nic_idrops": 30,
+    "suricata_cpu_max_pct": 7.5,
+    "suricata_rss_mb": 1238,
+    "suricata_cpu_avg_pct": 5.0,
+    "ntopng_cpu_avg_pct": 66.3,
+    "ntopng_rss_mb": 442
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794866058,
+   "t1": 1794866073,
+   "sent_mbps": 962.3,
+   "recv_mbps": 951.6,
+   "jitter_ms": 0.29,
+   "lost_pct": 0.8,
+   "lost": 9940,
+   "packets": 1242153,
+   "cpu_local": {
+    "host_total": 32.90199729801243,
+    "host_user": 5.284258556349504,
+    "host_system": 27.6177320766714,
+    "remote_total": 97.06613258088802,
+    "remote_user": 18.88444906271106,
+    "remote_system": 78.18168351817695
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     45,
+     22,
+     20,
+     24
+    ],
+    "cpu_avg_total": 27.9,
+    "cpu_max_core": 48,
+    "intr_avg_total": 7.9,
+    "load1_max": 0.9,
+    "temp_max_c": 61.15,
+    "temp_avg_c": 60.1,
+    "mem_free_min_mb": 13028,
+    "wan_nic_rx_mbps_max": 1031,
+    "wan_nic_tx_mbps_max": 4,
+    "wan_nic_idrops": 28,
+    "suricata_cpu_max_pct": 4.5,
+    "suricata_rss_mb": 1239,
+    "suricata_cpu_avg_pct": 3.6,
+    "ntopng_cpu_avg_pct": 40.4,
+    "ntopng_rss_mb": 438
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794866080,
+   "t1": 1794866095,
+   "sent_mbps": 944.5,
+   "recv_mbps": 944.2,
+   "jitter_ms": 0.019,
+   "lost_pct": 0.02,
+   "lost": 272,
+   "packets": 1223038,
+   "cpu_local": {
+    "host_total": 60.23797220346865,
+    "host_user": 5.74166701329673,
+    "host_system": 54.49631185613466,
+    "remote_total": 8.17910210168752,
+    "remote_user": 1.7824203893667128,
+    "remote_system": 6.39668171232081
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     32,
+     28,
+     31,
+     32
+    ],
+    "cpu_avg_total": 30.6,
+    "cpu_max_core": 50,
+    "intr_avg_total": 3.2,
+    "load1_max": 0.75,
+    "temp_max_c": 62.25,
+    "temp_avg_c": 60.2,
+    "mem_free_min_mb": 13034,
+    "wan_nic_rx_mbps_max": 2,
+    "wan_nic_tx_mbps_max": 1028,
+    "wan_nic_idrops": 32,
+    "suricata_cpu_max_pct": 5.0,
+    "suricata_rss_mb": 1240,
+    "suricata_cpu_avg_pct": 3.6,
+    "ntopng_cpu_avg_pct": 42.9,
+    "ntopng_rss_mb": 438
+   }
   }
  ]
 }

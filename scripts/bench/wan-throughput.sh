@@ -39,7 +39,7 @@ ping_run() {   # ping $PING_TARGET (WAN) and the router (LAN) at 5 Hz for $1 s
   ping -b "$WIRED_IF" -i 0.2 -c $((secs * 5)) "$ROUTER_IP" > "$OUT/ping-$tag-lan.txt" 2>&1 &
 }
 IPERF_SERVERS=${IPERF_SERVERS:-speedtest.chi11.us.leaseweb.net speedtest.dal13.us.leaseweb.net}
-SRC_IP=$(ipconfig getifaddr "$WIRED_IF" 2>/dev/null || ip -4 -o addr show "$WIRED_IF" | awk '{print $4}' | cut -d/ -f1)
+SRC_IP=${SRC_IP:-$(ipconfig getifaddr "$WIRED_IF" 2>/dev/null || ip -4 -o addr show "$WIRED_IF" | awk '{print $4}' | cut -d/ -f1)}
 iperf_stream() {  # server streams dir end -> prints received bytes (download: -R)
   local srv=$1 n=$2 dir=$3 end=$4 p secs o flag=; [ "$dir" = down ] && flag=-R
   for p in $(seq 5201 5210); do

@@ -1,0 +1,10 @@
+service-suricata-config-sha256 170782a4ca0bb6cc
+service-suricata-config-lines 32
+mode-file absent
+config-vyos-pi-dir 
+drop-conf absent
+ips-nft-table absent
+service active
+capture-mode --af-packet
+rules-drop-action 1
+watchdog-timer inactive

@@ -4,7 +4,7 @@
 Usage: summarize.py DATA_ROOT [STATE ...]   (default: every sub-directory)
 For each throughput run, router samples whose timestamp falls inside the run
 window are aggregated: per-core busy % (from kern.cp_times / /proc/stat
-deltas), load average, temperature, memory, WAN NIC drops, Suricata CPU/RSS.
+deltas), load average, temperature, memory, WAN NIC drops, Suricata CPU/RSS, and ntopng CPU/RSS when the poller recorded it (Linux).
 """
 import json, os, sys
 
@@ -21,10 +21,11 @@ def load_poll(path):
             la = list(map(float, p[2].split())); temp = int(p[3]); fq = int(p[4])
             mem = list(map(int, p[5].split())); nic = list(map(int, p[6].split()))
             sur = list(map(float, p[7].split()))
+            ntop = list(map(float, p[8].split())) if len(p) > 8 else [0.0, 0.0]
         except ValueError:
             continue
         rows.append(dict(ts=ts, cp=cp, la=la, temp=temp / 1000 if temp > 1000 else temp,
-                         fq=fq, mem=mem, nic=nic, sur=sur))
+                         fq=fq, mem=mem, nic=nic, sur=sur, ntop=ntop))
     # per-core busy % between consecutive samples (5 counters/core: user nice sys intr idle)
     rows.sort(key=lambda r: r["ts"])
     for a, b in zip(rows, rows[1:]):
@@ -63,6 +64,9 @@ def window(poll, t0, t1):
         "wan_nic_idrops": sum(r["idrop"] for r in w),
         "suricata_cpu_max_pct": max(r["sur"][0] for r in w),
         "suricata_rss_mb": round(max(r["sur"][1] for r in w) / 1024),
+        "suricata_cpu_avg_pct": round(sum(r["sur"][0] for r in w) / len(w), 1),
+        "ntopng_cpu_avg_pct": round(sum(r["ntop"][0] for r in w) / len(w), 1),
+        "ntopng_rss_mb": round(max(r["ntop"][1] for r in w) / 1024),
     }
 
 def jl(path):

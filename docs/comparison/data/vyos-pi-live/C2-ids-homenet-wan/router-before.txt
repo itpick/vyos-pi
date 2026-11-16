@@ -1,0 +1,24 @@
+ 21:55:40 up 34 min,  0 user,  load average: 0.76, 0.76, 0.58
+Mem:           15973        3157       11560           5        1506       12815
+== suricata: active, mode file: 
+capture.afpacket.busy_loop_avg 0
+capture.afpacket.poll_data 3366
+capture.afpacket.poll_errors 0
+capture.afpacket.poll_signal 0
+capture.afpacket.poll_timeout 16
+capture.afpacket.polls 3382
+capture.afpacket.send_errors 0
+capture.errors 0
+capture.kernel_drops 0
+capture.kernel_packets 4166
+decoder.bytes 2336516
+decoder.pkts 4274
+detect.alert 56
+detect.alert_queue_overflow 0
+detect.alerts_suppressed 0
+flow.memuse 11508608
+tcp.reassembly_gap 0
+tcp.segment_memcap_drop 0
+tcp.ssn_memcap_drop 0
+uptime 27
+detect.rules_loaded 53439 failed 0 last_reload 2026-11-16T21:55:26.074064+0000

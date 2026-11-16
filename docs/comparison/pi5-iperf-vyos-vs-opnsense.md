@@ -14,8 +14,8 @@ opnsense-pi home router. Both are Pi 5, 16 GB, 4x Cortex-A76.
 They are **host-terminated** tests: the iperf3 traffic starts or ends on the router itself. They
 measure the router's NIC, driver, network stack and CPU. They do **not** measure forwarding, NAT
 or the firewall path. For that, see the forwarding/NAT and Suricata baseline in
-[opnsense-pi-baseline.md](opnsense-pi-baseline.md). The same comparison for VyOS needs a wired
-client *behind* pi5-1 (see [Still to do](#still-to-do)).
+[opnsense-pi-baseline.md](opnsense-pi-baseline.md), and the same tests with VyOS as the live
+router in [vyos-pi-live.md](vyos-pi-live.md).
 
 ## Setup
 
@@ -61,22 +61,25 @@ with per-core averages in brackets. "Busiest core" is the highest single-core 2 
 
 ### Headline
 
-| Test | pi5-1 eth0, VyOS | pi5-1 eth0, Ubuntu reference | pi5-1 eth1 (USB RTL8156B), VyOS | opnsense-pi LAN ue1 (USB RTL8156) |
+| Test | pi5-1 eth0, VyOS | pi5-1 eth0, Ubuntu reference | pi5-1 LAN eth2 (USB RTL8156), VyOS as the live router ⁴ | opnsense-pi LAN ue1 (USB RTL8156) |
 |---|---:|---:|---:|---:|
-| TCP Mac → router, 1 stream | 789 / 818 | 770 | not tested | 591 / 594 |
-| TCP Mac → router, 4 streams | 727 / 739 | 789 | not tested | 600 / 612 |
-| TCP router → Mac, 1 stream | 911 / 583 ¹ | 925 | not tested | 928 / 922 |
-| TCP router → Mac, 4 streams | 927 / 910 | 924 | not tested | 932 / 931 |
-| UDP Mac → router @1G (loss %) | 954 (0.66 %) | 954 (0.53 %) | not tested | 953 (0.78 %) |
-| UDP router → Mac @1G (loss %) | 955 (0.11 %) | 954 (0.28 %) | not tested | 930 (0.04 %) |
-| Router CPU avg, TCP runs | 4 to 23 % | 9 to 29 % | | 22 to 33 % |
-| Busiest core, TCP runs | 11 to 47 % | 25 to 63 % | | 38 to 78 % |
-| Temperature max | n/a ² | 67 °C | | 76 °C |
+| TCP Mac → router, 1 stream | 789 / 818 | 770 | **911 / 916** | 591 / 594 |
+| TCP Mac → router, 4 streams | 727 / 739 | 789 | **862 / 871** | 600 / 612 |
+| TCP router → Mac, 1 stream | 911 / 583 ¹ | 925 | 911 / 923 | 928 / 922 |
+| TCP router → Mac, 4 streams | 927 / 910 | 924 | 927 / 928 | 932 / 931 |
+| UDP Mac → router @1G (loss %) | 954 (0.66 %) | 954 (0.53 %) | 952 (0.72 %) / 952 (0.80 %) | 953 (0.78 %) |
+| UDP router → Mac @1G (loss %) | 955 (0.11 %) | 954 (0.28 %) | 922 (0.32 %) / 944 (0.02 %) | 930 (0.04 %) |
+| Router CPU avg, TCP runs | 4 to 23 % | 9 to 29 % | 25 to 38 % | 22 to 33 % |
+| Busiest core, TCP runs | 11 to 47 % | 25 to 63 % | 52 to 79 % | 38 to 78 % |
+| Temperature max | n/a ² | 67 °C | 62 °C | 76 °C |
 
 ¹ The repeat run stalled at 0 Mbit/s for its first 5 s, then ran at 930 to 947 Mbit/s; the first
 run held 850 to 933 Mbit/s for all 15 s. ² VyOS exposes no CPU temperature: there is no
 `/sys/class/thermal` zone and no `vcgencmd`; the only hwmon sensors are the NVMe drive and
-`rpi_volt`.
+`rpi_volt`. (vyos-pi 2026.11.16-2 has a `cpu-thermal` zone; the live-router column uses it.)
+⁴ Measured later the same day, with pi5-1 as the live home router (vyos-pi 2026.11.16-2, Linux
+6.18.62), carrying household traffic and running Suricata (IDS on the WAN), ntopng (capturing
+this port too) and AdGuard. See [VyOS as the live router](#vyos-as-the-live-router-lan-port-eth2).
 
 VyOS and opnsense-pi were run twice (shown as "first / repeat"). The opnsense-pi runs agree within
 3 %; the VyOS runs within 4 %, apart from the stall in ¹. A first VyOS run started 1 minute after
@@ -95,10 +98,12 @@ What it shows:
   so the inbound path is the one to watch.
 - UDP at 1 Gbit/s offered: all receive at about line rate with under 1 % loss and jitter under
   0.02 ms.
-- This is **not a fair NIC-for-NIC comparison yet**: the OPNsense port is a USB adapter on a busy
-  live router, while the pi5-1 port is the onboard RP1 on an idle board. VyOS vs Ubuntu on pi5-1
-is a fair comparison (same port, same board, both idle). The fair rows are the
-  VyOS eth1 rows (same RTL8156 chip family) once eth1 has a peer.
+- The eth0 columns are **not a NIC-for-NIC comparison** with OPNsense: there the OPNsense port is a
+  USB adapter on a busy live router, and the pi5-1 port is the onboard RP1 on an idle board. VyOS
+  against Ubuntu on pi5-1 is fair (same port, same board, both idle).
+- **The like-for-like row is the live-router column:** VyOS's USB RTL8156 LAN port on a live
+  router, against OPNsense's USB RTL8156 LAN port on a live router. VyOS receives at 862 to
+  916 Mbit/s, OPNsense at 591 to 612.
 
 ### All runs
 
@@ -135,11 +140,57 @@ TCP retransmits are counted by whichever side sends (the Mac for "Mac → router
 column is the tested port's own counter and on opnsense-pi includes household traffic. Raw iperf3
 JSON, poll samples and `summary.json` are in [data/pi5-iperf/](data/pi5-iperf/).
 
+### VyOS as the live router: LAN port eth2
+
+Measured on 2026-11-16 at 21:50 to 21:54 UTC, after pi5-1 replaced opnsense-pi as the house
+router. `eth2` is a USB RTL8156 2.5 GbE adapter (USB ID 0bda:8156, driver `r8152`,
+80:3f:5d:fb:63:ce) on the house switch, linked at 1 Gb/s. It was tested from the wired Mac
+exactly as above: `iperf-host.sh 192.168.68.1 vyos@192.168.68.1 eth2`, 6 runs of 15 s with 5 s
+gaps, run twice.
+
+**The physical adapter differs from OPNsense's.** OPNsense's LAN test used the RTL8156 adapter
+80:3f:5d:f9:e1:bd (`ue1`). That adapter moved with the router role and is now VyOS's LAN2 port
+(`eth1`, to the Deco Wi-Fi, linked at 2.5 Gb/s), where a wired test is not possible. The two
+adapters are the same chip and model; the OS, the driver (`r8152` against FreeBSD's `ure`) and
+the board are what differ.
+
+Both routers were live: household traffic, pf or nftables with NAT, and Suricata IDS on the WAN.
+VyOS was also running ntopng, which captures this port and uses cores 1 to 3, so its CPU figures
+include ntopng.
+
+| Setup | Test | Mbit/s | TCP retransmits | UDP loss % / jitter ms | Router CPU avg % (per core) | Busiest core % | NIC rx/tx peak Mbit/s | Temp max °C |
+|---|---|---:|---:|---|---|---:|---|---:|
+| vyos-live-lan-eth2 | TCP Mac → router x1 | 911 | 0 |  | 34.7 (65/24/24/25) | 69 | 1011 / 14 | 60.05 |
+| vyos-live-lan-eth2 | TCP router → Mac x1 | 911 | 45 |  | 33.9 (56/24/29/26) | 79 | 7 / 1050 | 61.15 |
+| vyos-live-lan-eth2 | TCP Mac → router x4 | 862 | 663 |  | 35.3 (64/25/25/28) | 68 | 960 / 18 | 60.6 |
+| vyos-live-lan-eth2 | TCP router → Mac x4 | 927 | 500 |  | 27.0 (51/19/23/15) | 67 | 10 / 1040 | 60.6 |
+| vyos-live-lan-eth2 | UDP Mac → router x1 @1G | 952 |  | 0.72 / 0.024 | 27.7 (48/20/19/24) | 54 | 1037 / 4 | 61.15 |
+| vyos-live-lan-eth2 | UDP router → Mac x1 @1G | 922 |  | 0.32 / 0.022 | 36.8 (41/43/29/35) | 63 | 3 / 1030 | 61.15 |
+| vyos-live-lan-eth2-repeat | TCP Mac → router x1 | 916 | 0 |  | 37.9 (62/29/30/29) | 66 | 1028 / 14 | 61.15 |
+| vyos-live-lan-eth2-repeat | TCP router → Mac x1 | 923 | 62 |  | 25.0 (48/17/19/16) | 52 | 7 / 1034 | 59.5 |
+| vyos-live-lan-eth2-repeat | TCP Mac → router x4 | 871 | 449 |  | 34.4 (60/26/22/30) | 71 | 977 / 20 | 60.6 |
+| vyos-live-lan-eth2-repeat | TCP router → Mac x4 | 928 | 675 |  | 30.4 (57/20/24/21) | 73 | 10 / 1046 | 61.7 |
+| vyos-live-lan-eth2-repeat | UDP Mac → router x1 @1G | 952 |  | 0.8 / 0.29 | 27.9 (45/22/20/24) | 48 | 1031 / 4 | 61.15 |
+| vyos-live-lan-eth2-repeat | UDP router → Mac x1 @1G | 944 |  | 0.02 / 0.019 | 30.6 (32/28/31/32) | 50 | 2 / 1028 | 62.25 |
+
+- **Receiving on the router**: 911 to 916 Mbit/s with 1 stream and **0 retransmits**, 862 to
+  871 with 4 streams. OPNsense on its RTL8156 got 591 to 612 with 2,000 to 6,000 retransmits.
+  So the inbound limit seen on opnsense-pi is the FreeBSD side (`ure` and the stack), not the chip.
+- **Sending**: line rate on both (911 to 928 against 922 to 932).
+- UDP at 1 Gbit/s offered: both receive at line rate with under 1 % loss.
+- Core 0 takes all the NIC interrupts on VyOS, so it is the busiest core (48 to 65 % average).
+- Both runs agree within 2 %. The NIC peak column reads a little above 1,000 Mbit/s because two
+  poll samples sometimes arrive close together (see Method); the averages are not affected.
+
+Raw data: [data/pi5-iperf/vyos-live-lan-eth2/](data/pi5-iperf/vyos-live-lan-eth2/) and
+`vyos-live-lan-eth2-repeat/`. NAT forwarding, Suricata IDS/IPS and ntopng on the same live router
+are in [vyos-pi-live.md](vyos-pi-live.md).
+
 ### Not tested, and why
 
 | Port | Why |
 |---|---|
-| pi5-1 `eth1`, USB RTL8156B 2.5 GbE (`r8152`) | **No peer**: it is cabled to an isolated switch with no other hosts. The adapter is verified on VyOS: linked at 1 Gb/s, `r8152` driver, 0 errors. |
+| pi5-1 `eth1`, USB RTL8156 2.5 GbE (`r8152`), in the bench setup | **No peer** at the time: it was cabled to an isolated switch. Now that pi5-1 is the live router, its USB RTL8156 LAN port (`eth2`) has been tested instead: see [VyOS as the live router](#vyos-as-the-live-router-lan-port-eth2). Its `eth1` is LAN2 (Deco Wi-Fi only), so a wired test there would be Wi-Fi-limited. |
 | opnsense-pi onboard `rp1eth0` | It is the **WAN** port. Testing it from the LAN side would mean exposing an iperf server on the WAN, which was not done. |
 | opnsense-pi LAN2 `ue0`, USB 2.5 GbE | Only Wi-Fi clients sit behind it (TP-Link Deco), so any result would be **Wi-Fi-limited**. Skipped. |
 
@@ -241,9 +292,6 @@ Data: [data/boot/pi5-1-vyos-boots.md](data/boot/pi5-1-vyos-boots.md) and the wat
 
 - **VyOS HTTP API**: not configured on pi5-1, so its "API ready" time is not measured yet.
 - **The 8 to 12 s reachability gap** after some VyOS boots, and the `kexec` commit error.
-- **eth1 (USB RTL8156B)**: needs a peer. Once its cable is on the house switch, it is already set
-  to take a DHCP lease (client only).
-- **NAT forwarding A/B**: the comparison that matters for a router. It needs a **wired client
-  behind pi5-1** (on a LAN port that pi5-1 routes and NATs to the house LAN), running
-  `wan-throughput.sh` and `lan-forward.sh` the same way as the opnsense-pi baseline. These
-  host-terminated tests cannot stand in for that.
+- ~~eth1 (USB RTL8156B) needs a peer~~: done on the live router's USB RTL8156 LAN port (`eth2`), above.
+- ~~NAT forwarding A/B~~: done with pi5-1 as the live router, using the same scripts as the
+  opnsense-pi baseline: [vyos-pi-live.md](vyos-pi-live.md).

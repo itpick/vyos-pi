@@ -1,0 +1,36 @@
+ 22:06:59 up 46 min,  0 user,  load average: 0.98, 0.94, 0.75
+Mem:           15973        2838       11876           6        1510       13135
+== suricata: active, mode file: MODE=ips QUEUE=0 FAIL=open 
+== ips nft: 		iifname "eth0" queue flags bypass to 0
+== ips nft: 		oifname "eth0" queue flags bypass to 0
+decoder.bytes 2737655408
+decoder.pkts 2483557
+detect.alert 1016
+detect.alert_queue_overflow 0
+detect.alerts_suppressed 55
+flow.memuse 11428608
+ips.accepted 2481007
+ips.blocked 2549
+ips.drop_reason.applayer_error 10
+ips.drop_reason.applayer_memcap 0
+ips.drop_reason.decode_error 0
+ips.drop_reason.defrag_error 0
+ips.drop_reason.defrag_memcap 0
+ips.drop_reason.flow_drop 2058
+ips.drop_reason.flow_memcap 0
+ips.drop_reason.nfq_error 0
+ips.drop_reason.rules 6
+ips.drop_reason.stream_error 341
+ips.drop_reason.stream_memcap 0
+ips.drop_reason.stream_midstream 134
+ips.drop_reason.stream_reassembly 0
+ips.drop_reason.stream_urgent 0
+ips.drop_reason.threshold_detection_filter 0
+ips.drop_reason.tunnel_packet_drop 0
+ips.rejected 0
+ips.replaced 0
+tcp.reassembly_gap 0
+tcp.segment_memcap_drop 0
+tcp.ssn_memcap_drop 0
+uptime 186
+detect.rules_loaded 53439 failed 0 last_reload 2026-11-16T22:04:05.834808+0000
