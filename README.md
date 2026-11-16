@@ -126,6 +126,53 @@ The hook logs to `/var/log/vyos-pi.log`.
 
 [T3871]: https://vyos.dev/T3871
 
+### IDS and IPS (Suricata)
+
+VyOS rolling ships [Suricata](https://suricata.io/) (7.0.10, from Debian
+bookworm-backports) and suricata-update, and configures them with
+`service suricata`. It is off until configured. In VyOS's own mode it is an
+IDS: af-packet capture on the listed interfaces, alerts only.
+
+IDS on the WAN with the ET Open rules (or seed it: `seed-config.py ... --ids eth1`,
+which also sets every address and port group the ET Open rules use):
+
+```
+configure
+set service suricata interface eth1
+set service suricata address-group home-net address 192.168.1.0/24
+set service suricata address-group external-net group '!home-net'
+set service suricata port-group http-ports port 80
+# ... the other groups ET Open references: see scripts/seed-config.py --ids
+set service suricata log eve filename eve.json
+set service suricata log eve type alert
+commit; save; exit
+update suricata        # fetch ET Open with suricata-update, restart Suricata
+```
+
+Alerts go to `/var/log/suricata/eve.json`. To check it:
+`curl http://testmynids.org/uid/index.html` from or through the router raises
+sid 2100498 ("GPL ATTACK_RESPONSE id check returned root").
+
+**IPS** (vyos-pi addition). VyOS starts Suricata with af-packet only; vyos-pi's
+drop-in ([`suricata-start`](overlay/usr/libexec/vyos-pi/suricata-start)) can
+run it on NFQUEUE instead, with every packet the router forwards (all
+interfaces) queued to it from an nftables table that sits ahead of VyOS's
+firewall:
+
+```
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips          # fail open (default)
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips closed   # drop traffic while Suricata is down
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ids          # back to VyOS's af-packet IDS
+```
+
+The mode is kept in `/config/vyos-pi/suricata.conf`, so it survives reboots and
+upgrades. ET Open rules only alert; list the ones to enforce in
+`/etc/suricata/drop.conf` (sids or `re:` patterns, suricata-update's syntax)
+and run `update suricata` again. The router's own traffic is not queued (only
+forwarded traffic is); "service suricata interface" still has to name at least
+one interface for VyOS to start the service. Throughput on a Pi is untested:
+the VM says nothing about it (see below).
+
 ### First boot
 
 1. Update the Pi's EEPROM bootloader first (from Raspberry Pi OS: `sudo rpi-eeprom-update -a`).
