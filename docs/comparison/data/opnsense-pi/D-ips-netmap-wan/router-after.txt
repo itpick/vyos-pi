@@ -1,0 +1,18 @@
+ 2:47PM  up  1:38, 0 users, load averages: 0.89, 0.75, 0.59
+== /var/log/suricata/stats.log (last block)
+Date: 11/16/2026 -- 14:44:21 (uptime: 0d, 00h 02m 05s)
+capture.kernel_packets                                       | Total                     | 106108
+decoder.pkts                                                 | Total                     | 106019
+decoder.bytes                                                | Total                     | 90944982
+detect.alert                                                 | Total                     | 725
+flow.memuse                                                  | Total                     | 6834304
+eve.json
+eve.json.0
+latest.log
+stats.log
+stats.log.0
+stats.log.1
+suricata_20250611.log
+suricata_20261114.log
+suricata_20261115.log
+suricata_20261116.log
