@@ -29,7 +29,10 @@ log() { echo "$(date '+%F %T') $*" >&2; }
 
 # Reuse the remote polling loop from router-poll.sh verbatim.
 REMOTE=$(sed -n "/<<'REMOTE'/,/^REMOTE$/p" "$(dirname "$0")/router-poll.sh" | sed '1d;$d')
-ssh "${SSH_OPTS[@]}" "$POLL_SSH" "env WANIF=$POLL_IF INT=$POLL_INT sh -s" <<<"$REMOTE" >> "$OUT/poll.raw" 2>/dev/null &
+# Each sample is re-stamped with this Mac's clock on arrival, so a router whose
+# clock is wrong (no RTC, NTP not synced yet) still lines up with the runs.
+ssh "${SSH_OPTS[@]}" "$POLL_SSH" "env WANIF=$POLL_IF INT=$POLL_INT sh -s" <<<"$REMOTE" 2>/dev/null |
+  while IFS= read -r l; do echo "$(date +%s)|${l#*|}"; done >> "$OUT/poll.raw" &
 poller=$!
 trap 'kill $poller 2>/dev/null' EXIT
 sleep 3

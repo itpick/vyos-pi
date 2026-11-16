@@ -33,7 +33,7 @@ def main():
             cpu = (f"{w['cpu_avg_total']} ({'/'.join(map(str, w['cpu_avg_per_core']))})" if w else "n/a")
             nic = f"{w.get('wan_nic_rx_mbps_max')} / {w.get('wan_nic_tx_mbps_max')}" if w else ""
             print(f"| {label} | {test} | {r['recv_mbps']:.0f} | {rt} | {udp} | {cpu} | "
-                  f"{w.get('cpu_max_core', '')} | {nic} | {w.get('temp_max_c', '')} |")
+                  f"{w.get('cpu_max_core', '')} | {nic} | {w.get('temp_max_c') or 'n/a'} |")
     json.dump(out, open(os.environ.get("SUMMARY_JSON", "/dev/null"), "w"), indent=1)
 
 if __name__ == "__main__":

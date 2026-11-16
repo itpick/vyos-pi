@@ -640,5 +640,527 @@
     "suricata_rss_mb": 0
    }
   }
+ ],
+ "pi5-vyos-eth0": [
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794854636,
+   "t1": 1794854657,
+   "recv_mbps": 789.3,
+   "sent_mbps": 790.5,
+   "retransmits": 0,
+   "cpu_local": {
+    "host_total": 27.5224527201533,
+    "host_user": 1.6803999000249938,
+    "host_system": 25.8420528201283,
+    "remote_total": 6.120606096967515,
+    "remote_user": 0.0695491603837103,
+    "remote_system": 6.0510702691171865
+   },
+   "router": {
+    "samples": 10,
+    "cpu_avg_per_core": [
+     27,
+     15,
+     13,
+     8
+    ],
+    "cpu_avg_total": 15.6,
+    "cpu_max_core": 46,
+    "intr_avg_total": 5.4,
+    "load1_max": 1.07,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15276,
+    "wan_nic_rx_mbps_max": 877,
+    "wan_nic_tx_mbps_max": 16,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794854663,
+   "t1": 1794854679,
+   "recv_mbps": 911.1,
+   "sent_mbps": 913.2,
+   "retransmits": 6594,
+   "cpu_local": {
+    "host_total": 4.721295402921535,
+    "host_user": 0.13103355814424422,
+    "host_system": 4.590255187921055,
+    "remote_total": 8.74696445427702,
+    "remote_user": 0.22723223222122257,
+    "remote_system": 8.519732222055797
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     6,
+     4,
+     1,
+     4
+    ],
+    "cpu_avg_total": 3.7,
+    "cpu_max_core": 11,
+    "intr_avg_total": 0.4,
+    "load1_max": 0.98,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15274,
+    "wan_nic_rx_mbps_max": 3,
+    "wan_nic_tx_mbps_max": 952,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 4,
+   "t0": 1794854685,
+   "t1": 1794854707,
+   "recv_mbps": 726.8,
+   "sent_mbps": 728.1,
+   "retransmits": 443,
+   "cpu_local": {
+    "host_total": 31.947537116638,
+    "host_user": 2.149800907517753,
+    "host_system": 29.797742818767247,
+    "remote_total": 6.84267643639544,
+    "remote_user": 0.08022563167269275,
+    "remote_system": 6.762457470749475
+   },
+   "router": {
+    "samples": 11,
+    "cpu_avg_per_core": [
+     17,
+     9,
+     4,
+     9
+    ],
+    "cpu_avg_total": 10.0,
+    "cpu_max_core": 34,
+    "intr_avg_total": 2.9,
+    "load1_max": 0.83,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15271,
+    "wan_nic_rx_mbps_max": 788,
+    "wan_nic_tx_mbps_max": 16,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 4,
+   "t0": 1794854713,
+   "t1": 1794854728,
+   "recv_mbps": 927.1,
+   "sent_mbps": 932.4,
+   "retransmits": 4556,
+   "cpu_local": {
+    "host_total": 5.100464893234405,
+    "host_user": 0.0668433882591147,
+    "host_system": 5.03362150497529,
+    "remote_total": 12.61821323764287,
+    "remote_user": 0.3274294706787975,
+    "remote_system": 12.290790432873493
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     7,
+     5,
+     6,
+     6
+    ],
+    "cpu_avg_total": 6.2,
+    "cpu_max_core": 14,
+    "intr_avg_total": 0.9,
+    "load1_max": 0.8,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15260,
+    "wan_nic_rx_mbps_max": 6,
+    "wan_nic_tx_mbps_max": 960,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794854734,
+   "t1": 1794854750,
+   "sent_mbps": 962.8,
+   "recv_mbps": 953.5,
+   "jitter_ms": 0.011,
+   "lost_pct": 0.66,
+   "lost": 8270,
+   "packets": 1242915,
+   "cpu_local": {
+    "host_total": 38.57256062971563,
+    "host_user": 5.315995345950874,
+    "host_system": 33.256558621799215,
+    "remote_total": 86.5842642487931,
+    "remote_user": 13.993324661499832,
+    "remote_system": 72.5909529203706
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     32,
+     13,
+     19,
+     19
+    ],
+    "cpu_avg_total": 20.7,
+    "cpu_max_core": 44,
+    "intr_avg_total": 4.9,
+    "load1_max": 0.79,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15272,
+    "wan_nic_rx_mbps_max": 998,
+    "wan_nic_tx_mbps_max": 0,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "udp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794854756,
+   "t1": 1794854771,
+   "sent_mbps": 956.1,
+   "recv_mbps": 955.2,
+   "jitter_ms": 0.019,
+   "lost_pct": 0.11,
+   "lost": 1309,
+   "packets": 1238014,
+   "cpu_local": {
+    "host_total": 66.5769278689083,
+    "host_user": 6.918668296651574,
+    "host_system": 59.65824626118662,
+    "remote_total": 8.54794792362726,
+    "remote_user": 1.8285817841509,
+    "remote_system": 6.7193728069760175
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     17,
+     28,
+     20,
+     17
+    ],
+    "cpu_avg_total": 20.3,
+    "cpu_max_core": 44,
+    "intr_avg_total": 2.5,
+    "load1_max": 0.86,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15286,
+    "wan_nic_rx_mbps_max": 0,
+    "wan_nic_tx_mbps_max": 2012,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  }
+ ],
+ "pi5-vyos-eth0-repeat": [
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794854796,
+   "t1": 1794854811,
+   "recv_mbps": 818.0,
+   "sent_mbps": 819.3,
+   "retransmits": 232,
+   "cpu_local": {
+    "host_total": 27.33173882024957,
+    "host_user": 2.0673960324558847,
+    "host_system": 25.26434945158959,
+    "remote_total": 5.610171189775372,
+    "remote_user": 0.0630446198180099,
+    "remote_system": 5.54713323640759
+   },
+   "router": {
+    "samples": 7,
+    "cpu_avg_per_core": [
+     40,
+     20,
+     17,
+     14
+    ],
+    "cpu_avg_total": 22.8,
+    "cpu_max_core": 47,
+    "intr_avg_total": 7.8,
+    "load1_max": 0.83,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15275,
+    "wan_nic_rx_mbps_max": 894,
+    "wan_nic_tx_mbps_max": 16,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794854817,
+   "t1": 1794854833,
+   "recv_mbps": 583.1,
+   "sent_mbps": 584.7,
+   "retransmits": 817,
+   "cpu_local": {
+    "host_total": 2.9427360392228827,
+    "host_user": 0.01543100530899905,
+    "host_system": 2.927311699574924,
+    "remote_total": 6.272374543076877,
+    "remote_user": 0.1826126007160654,
+    "remote_system": 6.08976194236081
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     10,
+     4,
+     6,
+     2
+    ],
+    "cpu_avg_total": 5.5,
+    "cpu_max_core": 17,
+    "intr_avg_total": 0.5,
+    "load1_max": 0.82,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15258,
+    "wan_nic_rx_mbps_max": 4,
+    "wan_nic_tx_mbps_max": 957,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 4,
+   "t0": 1794854839,
+   "t1": 1794854859,
+   "recv_mbps": 739.3,
+   "sent_mbps": 740.6,
+   "retransmits": 356,
+   "cpu_local": {
+    "host_total": 30.023802909510973,
+    "host_user": 2.4061990157733417,
+    "host_system": 27.6175972318542,
+    "remote_total": 7.9027384599302835,
+    "remote_user": 0.07536538043084065,
+    "remote_system": 7.827379746052333
+   },
+   "router": {
+    "samples": 10,
+    "cpu_avg_per_core": [
+     24,
+     12,
+     10,
+     8
+    ],
+    "cpu_avg_total": 13.5,
+    "cpu_max_core": 45,
+    "intr_avg_total": 4.4,
+    "load1_max": 0.72,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15264,
+    "wan_nic_rx_mbps_max": 819,
+    "wan_nic_tx_mbps_max": 17,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 4,
+   "t0": 1794854865,
+   "t1": 1794854881,
+   "recv_mbps": 909.7,
+   "sent_mbps": 916.0,
+   "retransmits": 24682,
+   "cpu_local": {
+    "host_total": 5.546566278625168,
+    "host_user": 0.08273168818798356,
+    "host_system": 5.463834590437184,
+    "remote_total": 10.141666082290634,
+    "remote_user": 0.267315372947007,
+    "remote_system": 9.874370707002566
+   },
+   "router": {
+    "samples": 8,
+    "cpu_avg_per_core": [
+     9,
+     3,
+     4,
+     3
+    ],
+    "cpu_avg_total": 4.7,
+    "cpu_max_core": 12,
+    "intr_avg_total": 0.8,
+    "load1_max": 0.63,
+    "temp_max_c": 0,
+    "temp_avg_c": 0.0,
+    "mem_free_min_mb": 15260,
+    "wan_nic_rx_mbps_max": 6,
+    "wan_nic_tx_mbps_max": 959,
+    "wan_nic_idrops": 0,
+    "suricata_cpu_max_pct": 0.0,
+    "suricata_rss_mb": 0
+   }
+  }
+ ],
+ "pi5-vyos-eth0-just-booted": [
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794854482,
+   "t1": 1794854497,
+   "recv_mbps": 806.8,
+   "sent_mbps": 807.9,
+   "retransmits": 0,
+   "cpu_local": {
+    "host_total": 27.905657652166965,
+    "host_user": 1.9136890997051108,
+    "host_system": 25.991968552461852,
+    "remote_total": 5.232407174759586,
+    "remote_user": 0.05905168382296522,
+    "remote_system": 5.17335549093662
+   },
+   "router": {}
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794854503,
+   "t1": 1794854519,
+   "recv_mbps": 725.5,
+   "sent_mbps": 727.6,
+   "retransmits": 751,
+   "cpu_local": {
+    "host_total": 3.7087447814187664,
+    "host_user": 0.02346754531074747,
+    "host_system": 3.68527057486893,
+    "remote_total": 7.815119815812273,
+    "remote_user": 0.23284103862968147,
+    "remote_system": 7.58227877718259
+   },
+   "router": {}
+  },
+  {
+   "proto": "tcp",
+   "dir": "up",
+   "streams": 4,
+   "t0": 1794854525,
+   "t1": 1794854540,
+   "recv_mbps": 485.6,
+   "sent_mbps": 486.8,
+   "retransmits": 376,
+   "cpu_local": {
+    "host_total": 20.266344190220952,
+    "host_user": 1.4149493467973289,
+    "host_system": 18.851401505426,
+    "remote_total": 6.494186737193003,
+    "remote_user": 0.039645731027414415,
+    "remote_system": 6.454521006637577
+   },
+   "router": {}
+  },
+  {
+   "proto": "tcp",
+   "dir": "down",
+   "streams": 4,
+   "t0": 1794854546,
+   "t1": 1794854562,
+   "recv_mbps": 587.0,
+   "sent_mbps": 594.2,
+   "retransmits": 5042,
+   "cpu_local": {
+    "host_total": 3.511082320963377,
+    "host_user": 0.0346986066908605,
+    "host_system": 3.4763903704410737,
+    "remote_total": 6.849201475757376,
+    "remote_user": 0.18476296773667164,
+    "remote_system": 6.6644251763973745
+   },
+   "router": {}
+  },
+  {
+   "proto": "udp",
+   "dir": "up",
+   "streams": 1,
+   "t0": 1794854568,
+   "t1": 1794854583,
+   "sent_mbps": 830.2,
+   "recv_mbps": 825.6,
+   "jitter_ms": 0.01,
+   "lost_pct": 0.2,
+   "lost": 2107,
+   "packets": 1071217,
+   "cpu_local": {
+    "host_total": 33.47977083716972,
+    "host_user": 4.924284306027724,
+    "host_system": 28.555479866409435,
+    "remote_total": 59.01894309205954,
+    "remote_user": 5.481747053672705,
+    "remote_system": 53.537229370709085
+   },
+   "router": {}
+  },
+  {
+   "proto": "udp",
+   "dir": "down",
+   "streams": 1,
+   "t0": 1794854589,
+   "t1": 1794854605,
+   "sent_mbps": 956.0,
+   "recv_mbps": 954.5,
+   "jitter_ms": 0.018,
+   "lost_pct": 0.15,
+   "lost": 1796,
+   "packets": 1237859,
+   "cpu_local": {
+    "host_total": 68.46752666477654,
+    "host_user": 6.997936555728939,
+    "host_system": 61.4695901090476,
+    "remote_total": 8.53326183383286,
+    "remote_user": 1.8716087540934276,
+    "remote_system": 6.66165974615233
+   },
+   "router": {}
+  }
  ]
 }
