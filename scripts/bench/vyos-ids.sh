@@ -79,7 +79,7 @@ cancel-watchdog) rsh 'sudo systemctl stop bench-ips-restore.timer 2>/dev/null; s
 restore) rsh "sudo sh -c '$RESTORE_SH'; systemctl is-active suricata" ;;
 homenet-add-wan|homenet-del-wan)
   ip=$(public_ips); [ -n "$ip" ] || { echo "no public IP" >&2; exit 1; }
-  verb=set; [ "$CMD" = homenet-del-wan ] && verb=delete
+  verb="set"; [ "$CMD" = homenet-del-wan ] && verb="delete"
   printf '%s\n' '#!/bin/vbash' 'source /opt/vyatta/etc/functions/script-template' configure \
     "$verb service suricata address-group home-net address '$ip/32'" commit save exit |
     rsh 'cat > /tmp/bench-homenet.vbash; vbash /tmp/bench-homenet.vbash 2>&1 | tail -3; rm -f /tmp/bench-homenet.vbash' | sed "s/${ip//./\\.}/<WAN-IP>/g"
