@@ -209,6 +209,120 @@ class SampleTest(unittest.TestCase):
             self.assertIn(gap, self.notes)
 
 
+def run_xml(edit, *extra):
+    """run() on a copy of the sample with edit(xml_text) -> xml_text applied."""
+    with open(SAMPLE) as f:
+        xml = edit(f.read())
+    with tempfile.NamedTemporaryFile('w', suffix='.xml', delete=False) as f:
+        f.write(xml)
+    try:
+        text, notes = run(*(extra or EXAMPLE_ARGS), sample=f.name)
+    finally:
+        os.unlink(f.name)
+    return conv.parse_boot(text)[0], notes
+
+
+class ParityTest(unittest.TestCase):
+    """Behaviour that must match what pf on OPNsense actually does."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text, cls.notes = run(*EXAMPLE_ARGS)
+        cls.cfg, _ = conv.parse_boot(cls.text)
+
+    def test_multi_interface_rules_precede_single_interface_ones(self):
+        # pf: rules on several interfaces are "floating" (priority 200000) and come
+        # before single-interface rules (400000) whatever their sequence numbers
+        cfg, _ = run_xml(lambda x: x.replace(
+            '<sequence>10</sequence>\n            <action>block</action>\n            <quick>1</quick>\n'
+            '            <interface>lan,opt1</interface>',
+            '<sequence>90</sequence>\n            <action>block</action>\n            <quick>1</quick>\n'
+            '            <interface>lan,opt1</interface>'))
+        fwd = cfg['firewall']['ipv4']['forward']['filter']
+        spam, _ = find(fwd, 'Block outbound to Spamhaus DROP')
+        trusted, _ = find(fwd, 'Trusted IoT to the LAN (cast ports)')
+        guests, _ = find(fwd, 'Guests: internet only')
+        self.assertTrue(spam < trusted and spam < guests)
+
+    def test_interface_group_rules_between_floating_and_interfaces(self):
+        fwd = self.cfg['firewall']['ipv4']['forward']['filter']
+        feodo, _ = find(fwd, 'Block outbound to Feodo C2')
+        wg, _ = find(fwd, 'WireGuard clients to anywhere')
+        trusted, _ = find(fwd, 'Trusted IoT to the LAN (cast ports)')
+        self.assertTrue(feodo < wg < trusted)
+
+    def test_natural_uuid_order(self):
+        key = conv.Converter._natural
+        self.assertLess(key('6e8e67d8'), key('12e06f06'))
+        self.assertLess(key('12e06f06'), key('d83c9860'))
+
+    def test_icmpv6_like_pf(self):
+        fwd = self.cfg['firewall']['ipv6']['forward']['filter']
+        types = sorted(r['icmpv6']['type-name'][0] for _, r in rules(fwd) if 'icmpv6' in r)
+        self.assertEqual(types, sorted(conv.Converter.ICMP6_ERRORS))
+        inp = self.cfg['firewall']['ipv6']['input']['filter']
+        _, echo = find(inp, 'ICMPv6 echo-request from link-local')
+        self.assertEqual(echo['source']['address'], ['fe80::/10'])
+
+    def test_dhcp6_wan_accepts_router_advertisements(self):
+        wan = self.cfg['interfaces']['ethernet eth0']
+        self.assertIn('autoconf', wan['ipv6']['address'])
+
+    def test_tracking_interface_ra_like_opnsense(self):
+        ra = self.cfg['service']['router-advert']['interface eth1']
+        self.assertIn('managed-flag', ra)
+        self.assertIn('other-config-flag', ra)
+        self.assertEqual(ra['dnssl'], ['home.example'])
+
+    def test_ra_off_when_radvd_entry_disabled(self):
+        cfg, notes = run_xml(lambda x: x.replace(
+            '<OPNsense>', '<OPNsense><radvd><entries><entry uuid="r1"><enabled>0</enabled>'
+            '<interface>lan</interface></entry></entries></radvd>', 1))
+        self.assertNotIn('router-advert', cfg.get('service', {}))
+        self.assertIn('router advertisements are off', notes)
+
+    def test_dhcp_defaults_of_dhcpd(self):
+        srv = self.cfg['service']['dhcp-server']
+        for net in srv.values():
+            if not isinstance(net, dict):
+                continue
+            for k, sub in net.items():
+                if k.startswith('subnet '):
+                    self.assertIn('domain-name', sub['option'])
+                    self.assertTrue(sub['lease'])
+
+    def test_reservations_and_router_name_in_dns(self):
+        hosts = self.cfg['system']['static-host-mapping']
+        self.assertEqual(hosts['host-name nas.home.example']['inet'], ['10.20.0.51'])
+        self.assertIn('10.20.0.1', hosts['host-name router.home.example']['inet'])
+
+    def test_dns_listens_on_wireguard(self):
+        fwd = self.cfg['service']['dns']['forwarding']
+        self.assertIn('10.99.0.1', fwd['listen-address'])
+
+    def test_system_resolver_from_wan_dhcp(self):
+        cfg, _ = run_xml(lambda x: x.replace('<hostname>router</hostname>',
+                                             '<hostname>router</hostname><dnsallowoverride>1</dnsallowoverride>'))
+        self.assertEqual(cfg['system']['name-server'], ['eth0'])
+
+    def test_ntp_pool(self):
+        self.assertIn('pool', self.cfg['service']['ntp']['server 0.pool.ntp.org'])
+
+    def test_netflow_to_localhost_left_out(self):
+        cfg, notes = run_xml(lambda x: x.replace('<targets>192.0.2.50:2055</targets>',
+                                                 '<targets>127.0.0.1:2056</targets>'))
+        self.assertNotIn('flow-accounting', cfg['system'])
+        self.assertIn('left out', notes)
+
+    def test_not_any_note_says_what_pf_does(self):
+        cfg, notes = run_xml(lambda x: x.replace(
+            '<destination_net>SpamhausDROP</destination_net>',
+            '<destination_net>any</destination_net><destination_not>1</destination_not>'))
+        _, r = find(cfg['firewall']['ipv4']['forward']['filter'], 'Block outbound to Spamhaus DROP')
+        self.assertIn('disable', r)
+        self.assertIn('pf matches every address', notes)
+
+
 class ErrorTest(unittest.TestCase):
     def test_unmapped_interface(self):
         with self.assertRaises(SystemExit) as e:

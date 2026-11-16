@@ -37,14 +37,14 @@ its LAN side, before it replaces the working one.
 |---|---|---|
 | Interfaces: assignments, static IPv4, DHCP WAN | `interfaces ethernet ethN address` (`dhcp`) | yes |
 | VLANs | `interfaces ethernet ethN vif TAG` | yes |
-| IPv6: DHCPv6 WAN, track interface (prefix delegation) | `address dhcpv6`, `dhcpv6-options pd 0 interface …`, `service router-advert` | yes |
+| IPv6: DHCPv6 WAN, track interface (prefix delegation) | `address dhcpv6` + `ipv6 address autoconf` (default route from the uplink's RAs, as OPNsense does), `dhcpv6-options pd 0 interface …`, `service router-advert` with OPNsense's automatic flags (managed, other-config, DNSSL) | yes (no RDNSS: the tracked address is not known in advance) |
 | Block private / bogon networks on WAN | `network-group` + drop rules first on the WAN | yes |
 | Aliases: host, network | `firewall group address-group` / `network-group` (and `ipv6-…`) | yes |
 | Aliases: port | `firewall group port-group` | yes |
 | Aliases: MAC | `firewall group mac-group` | yes |
 | Aliases: URL table (IPs) | `firewall group remote-group` (VyOS downloads the list on `interval`) | yes |
 | Aliases: GeoIP | `source/destination geoip country-code` | no: noted |
-| Firewall rules (Rules [new] by sequence, then interface rules) | `firewall ipv4/ipv6 forward filter` and `input filter`, first match | yes |
+| Firewall rules, in pf's order: floating and multi-interface rules, then interface groups, then single interfaces; within each, Rules [new] by sequence (then uuid), then the legacy rules | `firewall ipv4/ipv6 forward filter` and `input filter`, first match | yes |
 | Rule "destination: This Firewall" / interface address | the `input` chain | yes |
 | Port forwards | `nat destination rule`, plus one `forward` rule accepting `connection-status nat destination` | yes |
 | NAT reflection | extra destination + source rules, or split DNS | no: noted |
@@ -53,10 +53,10 @@ its LAN side, before it replaces the working one.
 | Unbound (resolver) | `service dns forwarding` (PowerDNS recursor), recursive without `name-server` | yes |
 | Unbound query forwarding (per domain or all) | `domain X name-server Y` / `name-server` / `system` | yes (DNS over TLS forwards as plain DNS) |
 | Unbound host overrides | `system static-host-mapping` | yes (A/AAAA) |
-| Register DHCP leases in DNS | `service dhcp-server hostfile-update` | yes |
+| Register DHCP leases / reservations / the firewall's own name in DNS | `service dhcp-server hostfile-update` / `system static-host-mapping` | yes |
 | Unbound DNSBL (blocklists) | none | no: noted |
 | WireGuard instances and peers | `interfaces wireguard wgN` with `peer` | yes |
-| NetFlow export | `system flow-accounting netflow` | yes (OPNsense's local Insight collector has no VyOS equivalent) |
+| NetFlow export | `system flow-accounting netflow` | yes (OPNsense's local Insight collector on 127.0.0.1 has no VyOS equivalent and is left out) |
 | Remote syslog | `system syslog remote` | yes |
 | NTP servers | `service ntp server` | yes |
 | SSH, root's authorized keys | `service ssh`, user `vyos` public keys | yes |

@@ -19,15 +19,20 @@ What it translates (the common sections of a home router):
                   spoofed MAC, MTU, descriptions
   aliases         host/network -> address/network-group, port -> port-group,
                   mac -> mac-group, urltable -> remote-group (URL fetched by VyOS)
-  filter rules    the MVC rules (Firewall > Rules, by sequence) then the legacy
-                  ones, first match wins, into VyOS's forward and input chains;
-                  block-private/bogon networks on the WAN
+  filter rules    in pf's evaluation order (floating and multi-interface rules,
+                  then interface groups, then single interfaces; within each the
+                  MVC rules by sequence, then the legacy ones), first match wins,
+                  into VyOS's forward and input chains; block-private/bogon
+                  networks on the WAN; pf's automatic ICMPv6 rules
   NAT             port forwards -> nat destination (+ a forward rule for
                   DNAT'd traffic); outbound automatic/hybrid/manual -> nat source
   DHCP            Kea or ISC dhcpd (whichever is enabled): subnets, ranges,
-                  options, static reservations -> service dhcp-server (Kea)
-  DNS             Unbound -> PowerDNS recursor (service dns forwarding),
-                  host overrides -> static-host-mapping
+                  options (with OPNsense's defaults: system domain, 2-hour
+                  dhcpd lease), static reservations -> service dhcp-server (Kea)
+  DNS             Unbound -> PowerDNS recursor (service dns forwarding) on the
+                  interfaces Unbound listens on, host overrides, registered
+                  reservations and the firewall's name -> static-host-mapping;
+                  the router's own resolvers -> system name-server
   WireGuard       instances and peers -> interfaces wireguard
   NetFlow         -> system flow-accounting
   system          domain, time zone, NTP servers, syslog remotes, SSH
@@ -150,9 +155,13 @@ BOGONS4 = ['0.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '192.0
            '192.0.2.0/24', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24',
            '224.0.0.0/4', '240.0.0.0/4']
 PRIVATE4 = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+PRIVATE6 = ['fd00::/8', 'fe80::/10']
 
 
 class Converter:
+    ICMP6_ERRORS = ['destination-unreachable', 'packet-too-big', 'time-exceeded', 'parameter-problem']
+    ICMP6_ND = ['nd-router-solicit', 'nd-router-advert', 'nd-neighbor-solicit', 'nd-neighbor-advert']
+
     def __init__(self, xml_root, cfg, args, notes):
         self.x = xml_root
         self.cfg = cfg
@@ -263,6 +272,9 @@ class Converter:
             node = self.iface_node(key)
             if v6 == 'dhcp6':
                 add(node, ['address'], 'dhcpv6')
+                # OPNsense takes the IPv6 default route from the uplink's router
+                # advertisements (rtsold); VyOS only accepts RAs with autoconf on
+                leaf(node, ['ipv6', 'address', 'autoconf'], None)
             elif v6 == 'track6':
                 up = text(e, 'track6-interface')
                 pd.setdefault(up, []).append((key, int(text(e, 'track6-prefix-id') or '0', 0)))
@@ -278,15 +290,33 @@ class Converter:
             plen = {'0': '64', '1': '63', '2': '62', '3': '61', '4': '60', '5': '59',
                     '6': '58', '7': '57', '8': '56', '16': '48'}.get(length, '64')
             leaf(upn, ['dhcpv6-options', 'pd 0', 'length'], plen)
+            radvd = {text(e, 'interface'): e for e in self.x.findall('OPNsense/radvd/entries/entry')}
             for key, sla in downs:
                 d = at(upn, 'dhcpv6-options', 'pd 0', f'interface {self.ifmap[key]}')
                 leaf(d, ['address'], '1')
                 leaf(d, ['sla-id'], str(sla))
+                if text(self.x, f'dhcpdv6/{key}/enable') not in ('', '-1'):
+                    self.note('ipv6', f'{key}: the DHCPv6 server OPNsense runs on a tracking interface '
+                              'is not translated (VyOS serves the delegated prefix by SLAAC only)')
+                if key in radvd and text(radvd[key], 'enabled') != '1':
+                    self.note('ipv6', f'{key}: router advertisements are off in OPNsense; none written')
+                    continue
+                if key in radvd:
+                    self.note('ipv6', f'{key}: manual router advertisement settings not translated; '
+                              'OPNsense\'s automatic ones written instead')
+                # what OPNsense's automatic radvd does for a tracking interface
                 ra = at(self.cfg, 'service', 'router-advert', f'interface {self.ifmap[key]}')
+                leaf(ra, ['managed-flag'], None)
+                leaf(ra, ['other-config-flag'], None)
+                if text(self.x, 'system/domain'):
+                    leaf(ra, ['dnssl'], text(self.x, 'system/domain'))
                 at(ra, 'prefix ::/64')
             self.note('ipv6', f'{up}: prefix delegation /{plen} to '
                       + ', '.join(self.ifmap[k] for k, _ in downs)
-                      + ' with router advertisements (check the length your ISP delegates)')
+                      + ' with router advertisements (check the length your ISP delegates). '
+                      'OPNsense also advertises its own address on the interface as the DNS server '
+                      '(RDNSS); VyOS needs a fixed address for that, so none is advertised and '
+                      'clients keep using the IPv4 DNS server from DHCP')
 
     def iface_node(self, key):
         name = self.ifmap[key]
@@ -412,12 +442,40 @@ class Converter:
             return False
 
     # ---------------------------------------------------------- firewall
+    @staticmethod
+    def _natural(s):
+        """Sort key like PHP's SORT_NATURAL | SORT_FLAG_CASE (digit runs compare as numbers)."""
+        return [(0, int(c), '') if c.isdigit() else (1, 0, c.lower()) for c in re.findall(r'\d+|\D+', s)]
+
+    def _ifgroup_seq(self):
+        return {text(g, 'ifname'): int(text(g, 'sequence') or 0)
+                for g in self.x.findall('ifgroups/ifgroupentry') if text(g, 'ifname')}
+
+    def _priority(self, rule_ifaces, inverted, mvc):
+        """pf evaluates OPNsense's rules in priority tiers, whatever their sequence numbers:
+        floating (and, for the MVC rules, any rule on several interfaces) first, then
+        interface groups, then single interfaces (FilterRuleField::getPriority,
+        filter_core_rules_user)."""
+        groups = self._ifgroup_seq()
+        if mvc and (len(rule_ifaces) != 1 or inverted):
+            return 200000
+        if not mvc and inverted:
+            return 200000
+        key = rule_ifaces[0] if rule_ifaces else ''
+        if mvc and text(self.x, f'interfaces/{key}/type') == 'group':
+            return 300000 + groups.get(key, 0)
+        if not mvc and key in groups:
+            return 300000 + groups[key]
+        return 400000
+
     def collect_rules(self):
         rules = []
         mvc = self.x.findall('OPNsense/Firewall/Filter/rules/rule')
-        indexed = sorted(enumerate(mvc), key=lambda p: (int(text(p[1], 'sequence', '0') or 0), p[0]))
-        for _, r in indexed:
+        for i, r in enumerate(mvc):
+            ifaces = split_list(text(r, 'interface'))
             rules.append({
+                '_order': (self._priority(ifaces, text(r, 'interfacenot') == '1', True), 0,
+                           int(text(r, 'sequence', '0') or 0), self._natural(r.get('uuid') or ''), i),
                 'enabled': text(r, 'enabled', '1') == '1',
                 'action': text(r, 'action', 'pass'),
                 'interfaces': split_list(text(r, 'interface')),
@@ -434,7 +492,7 @@ class Converter:
                 'descr': text(r, 'description'),
                 'floating': text(r, 'interfacenot') == '1',
             })
-        for r in self.x.findall('filter/rule'):
+        for i, r in enumerate(self.x.findall('filter/rule')):
             def side(name):
                 s = r.find(name)
                 if s is None or s.find('any') is not None:
@@ -444,7 +502,9 @@ class Converter:
                 return net, text(s, 'not') == '1', text(s, 'port')
             src, src_not, src_port = side('source')
             dst, dst_not, dst_port = side('destination')
+            floating = text(r, 'floating') == 'yes'
             rules.append({
+                '_order': (self._priority(split_list(text(r, 'interface')), floating, False), 1, 0, [], i),
                 'enabled': text(r, 'disabled') != '1',
                 'action': text(r, 'type', 'pass'),
                 'interfaces': split_list(text(r, 'interface')),
@@ -457,8 +517,11 @@ class Converter:
                 'quick': text(r, 'quick', '1') in ('1', 'yes') or text(r, 'floating') != 'yes',
                 'gateway': text(r, 'gateway'),
                 'descr': text(r, 'descr'),
-                'floating': text(r, 'floating') == 'yes',
+                'floating': floating,
             })
+        # pf's order: priority tier, then (within a tier) the MVC rules by sequence and
+        # uuid, then the legacy ones in config order
+        rules.sort(key=lambda r: r['_order'])
         return rules
 
     def endpoint(self, net, negate, family, rule_ifaces):
@@ -588,9 +651,17 @@ class Converter:
         # implicit rules OPNsense has, VyOS does not
         for fam in ('ipv4', 'ipv6'):
             rule(fam, 'input', action='accept', inbound_interface__name='lo', description='loopback')
-        rule('ipv6', 'input', action='accept', protocol='ipv6-icmp',
-             description='ICMPv6 (neighbour discovery, router advertisements)')
-        rule('ipv6', 'forward', action='accept', protocol='ipv6-icmp', description='ICMPv6')
+        # pf's automatic ICMPv6 rules: errors from anywhere, neighbour discovery and
+        # router solicitations/advertisements, echo only link-local; nothing else
+        for t in self.ICMP6_ERRORS:
+            for hook in ('input', 'forward'):
+                rule('ipv6', hook, action='accept', protocol='ipv6-icmp', icmpv6__type_name=t,
+                     description=f'ICMPv6 {t}')
+        for t in self.ICMP6_ND:
+            rule('ipv6', 'input', action='accept', protocol='ipv6-icmp', icmpv6__type_name=t,
+                 description=f'ICMPv6 {t}')
+        rule('ipv6', 'input', action='accept', protocol='ipv6-icmp', icmpv6__type_name='echo-request',
+             source__address='fe80::/10', description='ICMPv6 echo-request from link-local')
         wan_names = [self.ifmap[k] for k in self.wan if self.ifmap.get(k)]
         for k in self.wan:
             if k not in self.ifmap:
@@ -610,6 +681,15 @@ class Converter:
                 for hook in ('input', 'forward'):
                     rule('ipv4', hook, action='drop', inbound_interface__name=self.ifmap[k],
                          source__group__network_group=gname, description=f'Block {label} networks on {k}')
+            if label == 'private':
+                g6 = at(fw, 'group', 'ipv6-network-group OPN-PRIVATE6')
+                for n in PRIVATE6:
+                    add(g6, ['network'], n)
+                for k in keys:
+                    for hook in ('input', 'forward'):
+                        rule('ipv6', hook, action='drop', inbound_interface__name=self.ifmap[k],
+                             source__group__network_group='OPN-PRIVATE6',
+                             description=f'Block private networks on {k}')
         # anti-lockout: OPNsense lets the LAN reach SSH/web GUI whatever the rules say
         websys = self.x.find('system/webgui')
         if 'lan' in self.ifmap and (websys is None or websys.find('noantilockout') is None):
@@ -647,8 +727,9 @@ class Converter:
                 dst, dst_reach = self.endpoint(r['dst'], r['dst_not'], fam, r['interfaces'])
                 if src is None or dst is None:
                     if (dst is None and r['dst_not']) or (src is None and r['src_not']):
-                        self.note('firewall', f'"{label}" ({fam}): "not any" matches no address; '
-                                  'written disabled (check what the rule was meant to do)')
+                        self.note('firewall', f'"{label}" ({fam}): "not any" reads as matching no '
+                                  'address, but OPNsense drops the "not" on "any", so pf matches '
+                                  'every address; written disabled (check what the rule was meant to do)')
                     else:
                         self.note('firewall', f'"{label}" ({fam}): no {fam} addresses to match; '
                                   'written disabled')
@@ -684,7 +765,10 @@ class Converter:
                         if 'address' in m and not (hook == 'input' and m.get('self')):
                             leaf(rr, [side, 'address'], m['address'])
                         if 'group' in m:
-                            leaf(rr, [side, 'group', m['group'][0]], m['group'][1])
+                            # ipv6 rules name ipv6-network-group NAME as "network-group NAME"
+                            kind = m['group'][0]
+                            leaf(rr, [side, 'group', kind[5:] if kind.startswith('ipv6-') else kind],
+                                 m['group'][1])
                         if port:
                             if port in self.aliases:
                                 leaf(rr, [side, 'group', 'port-group'], port)
@@ -801,6 +885,7 @@ class Converter:
             self.note('dhcp', f'Kea holds {len(kea.findall("reservations/reservation"))} reservations '
                       f'but is disabled; using {mode}')
         self.dhcp_ifaces = []
+        self.static_hosts = []    # (hostname, domain or '', ip) of the reservations
         if mode == 'none':
             return
         srv = at(self.cfg, 'service', 'dhcp-server')
@@ -834,6 +919,7 @@ class Converter:
             leaf(m, ['mac'], mac.lower())
             if desc:
                 leaf(m, ['description'], desc[:255])
+            return True
 
         if mode == 'kea':
             subs = {}
@@ -855,8 +941,10 @@ class Converter:
                     add(sub, ['option', 'name-server'], ns)
                 for ntp in split_list(text(s, 'option_data/ntp_servers')):
                     add(sub, ['option', 'ntp-server'], ntp)
-                if text(s, 'option_data/domain_name'):
-                    leaf(sub, ['option', 'domain-name'], text(s, 'option_data/domain_name'))
+                # OPNsense hands out the system domain when the subnet sets none
+                domain = text(s, 'option_data/domain_name') or text(self.x, 'system/domain')
+                if domain:
+                    leaf(sub, ['option', 'domain-name'], domain)
                 if text(kea, 'general/valid_lifetime'):
                     leaf(sub, ['lease'], text(kea, 'general/valid_lifetime'))
                 for i, pool in enumerate(split_list(text(s, 'pools'))):
@@ -890,10 +978,11 @@ class Converter:
                     add(sub, ['option', 'name-server'], ns)
                 for ntp in [d.text.strip() for d in e.findall('ntpserver') if d.text and d.text.strip()]:
                     add(sub, ['option', 'ntp-server'], ntp)
-                if text(e, 'domain'):
-                    leaf(sub, ['option', 'domain-name'], text(e, 'domain'))
-                if text(e, 'defaultleasetime'):
-                    leaf(sub, ['lease'], text(e, 'defaultleasetime'))
+                # dhcpd.conf's globals: the system domain and a 2-hour lease unless set per interface
+                domain = text(e, 'domain') or text(self.x, 'system/domain')
+                if domain:
+                    leaf(sub, ['option', 'domain-name'], domain)
+                leaf(sub, ['lease'], text(e, 'defaultleasetime') or '7200')
                 lo, hi = text(e, 'range/from'), text(e, 'range/to')
                 if lo and hi:
                     leaf(sub, ['range 0', 'start'], lo)
@@ -904,8 +993,10 @@ class Converter:
                         hi = str(hi_ip - 1)
                     leaf(sub, ['range 0', 'stop'], hi)
                 for m in e.findall('staticmap'):
-                    mapping(sub, text(m, 'hostname'), text(m, 'ipaddr'), text(m, 'mac'),
-                            text(m, 'descr'), net)
+                    if mapping(sub, text(m, 'hostname'), text(m, 'ipaddr'), text(m, 'mac'),
+                               text(m, 'descr'), net) and text(m, 'hostname'):
+                        self.static_hosts.append((text(m, 'hostname'), text(m, 'domain') or text(e, 'domain'),
+                                                  text(m, 'ipaddr')))
         if not srv:
             del self.cfg['service']['dhcp-server']
 
@@ -918,9 +1009,17 @@ class Converter:
             return
         fwd = at(self.cfg, 'service', 'dns', 'forwarding')
         inside = [k for k in self.ifnet if k not in self.wan]
+        # Unbound listens on every interface unless told otherwise (the firewall keeps the
+        # WAN out); the recursor gets the inside addresses, WireGuard's included
+        active = split_list(text(u, 'general/active_interface'))
         for k in inside:
-            add(fwd, ['listen-address'], str(self.ifnet[k].ip))
+            if not active or k in active:
+                add(fwd, ['listen-address'], str(self.ifnet[k].ip))
             add(fwd, ['allow-from'], str(self.ifnet[k].network))
+        wg_on = not active or 'wireguard' in active or any(k.startswith('wg') for k in active)
+        wg_addrs = [str(ip) for ip in self.router_ips if any(ip in n for n in self.wg_nets)]
+        for a in sorted(wg_addrs) if wg_on else []:
+            add(fwd, ['listen-address'], a)
         for n in self.wg_nets:
             add(fwd, ['allow-from'], str(n))
         leaf(fwd, ['cache-size'], '10000')
@@ -967,11 +1066,31 @@ class Converter:
         if u.findall('dnsbl/blocklist') or text(u, 'dnsbl/enabled') == '1':
             self.note('dns', 'DNS blocklists (Unbound DNSBL) have no VyOS equivalent: point clients at '
                       'a blocker (AdGuard Home, Pi-hole) or forward to a filtering resolver')
-        if text(u, 'general/regdhcp') == '1' or text(u, 'general/regdhcpstatic') == '1':
+        # Unbound answers for the firewall's own name with its interface addresses
+        host, domain = text(self.x, 'system/hostname'), text(self.x, 'system/domain')
+        if text(u, 'general/noregrecords') != '1' and host and domain:
+            m = at(self.cfg, 'system', 'static-host-mapping',
+                   f'host-name {safe_name(self.a.hostname or host, "router").lower()}.{domain}')
+            for a in fwd.get('listen-address', []):
+                if ipaddress.ip_address(a).version == 4:
+                    add(m, ['inet'], a)
+        regdomain = text(u, 'general/regdhcpdomain') or text(self.x, 'system/domain')
+        if text(u, 'general/regdhcp') == '1':
             if 'dhcp-server' in self.cfg.get('service', {}):
                 leaf(self.cfg, ['service', 'dhcp-server', 'hostfile-update'], None)
             self.note('dns', 'DHCP lease registration: "service dhcp-server hostfile-update" puts '
-                      'leases and reservations into /etc/hosts, which the recursor serves')
+                      'the leases into /etc/hosts, which the recursor serves')
+        if text(u, 'general/regdhcpstatic') == '1':
+            # Unbound serves the reservations whether or not the device holds a lease
+            for host, dom, ip in getattr(self, 'static_hosts', []):
+                name = safe_name(host, '').lower()
+                if not name:
+                    continue
+                fqdn = f'{name}.{dom or regdomain}' if (dom or regdomain) else name
+                m = at(self.cfg, 'system', 'static-host-mapping', f'host-name {fqdn}')
+                add(m, ['inet'], ip)
+            if getattr(self, 'static_hosts', None):
+                self.note('dns', 'DHCP reservations registered in DNS: written as static-host-mapping')
 
     # ---------------------------------------------------------- the rest
     def system(self):
@@ -984,13 +1103,25 @@ class Converter:
         tz = text(self.x, 'system/timezone')
         if tz:
             leaf(system, ['time-zone'], 'UTC' if tz in ('Etc/UTC', 'UTC') else tz)
+        # the router's own lookups: OPNsense's DNS servers, plus the WAN's DHCP-learned
+        # ones when "allow DNS server list to be overridden" is on
+        for d in self.x.findall('system/dnsserver'):
+            if d.text and d.text.strip():
+                add(system, ['name-server'], d.text.strip())
+        if text(self.x, 'system/dnsallowoverride') == '1':
+            for k in self.wan:
+                if self.ifmap.get(k) and text(self.x, f'interfaces/{k}/ipaddr') == 'dhcp':
+                    add(system, ['name-server'], self.ifmap[k])
         ts = split_list(text(self.x, 'system/timeservers').replace(' ', ','))
         if ts:
             ntp = at(self.cfg, 'service', 'ntp')
             for k in [k for k in ntp if k.startswith('server ')]:
                 del ntp[k]
+            ispool = split_list(text(self.x, 'ntpd/ispool').replace(' ', ','))
             for t in ts:
-                at(ntp, f'server {t}')
+                s = at(ntp, f'server {t}')
+                if t in ispool or t.endswith('.pool.ntp.org'):
+                    leaf(s, ['pool'], None)
         for d in self.x.findall('OPNsense/Syslog/destinations/destination'):
             if text(d, 'enabled', '1') != '1':
                 continue
@@ -1037,7 +1168,14 @@ class Converter:
         if nf is None or text(nf, 'collect/enable') != '1' and not text(nf, 'capture/targets'):
             return
         ifs = [self.ifmap[k] for k in split_list(text(nf, 'capture/interfaces')) if self.ifmap.get(k)]
-        targets = split_list(text(nf, 'capture/targets'))
+        targets = []
+        for t in split_list(text(nf, 'capture/targets')):
+            if t.rpartition(':')[0].startswith('127.'):
+                self.note('netflow', f'{t} is OPNsense\'s own collector (Reporting > Insight); VyOS has '
+                          'none, so it is left out: point the exporter at an external collector '
+                          '(nfcapd, ntopng, Akvorado) with "system flow-accounting netflow server"')
+            else:
+                targets.append(t)
         if not ifs or not targets:
             return
         fa = at(self.cfg, 'system', 'flow-accounting')
@@ -1048,9 +1186,6 @@ class Converter:
         for t in targets:
             host, _, port = t.rpartition(':')
             leaf(n, [f'server {host}', 'port'], port or '2055')
-            if host.startswith('127.'):
-                self.note('netflow', f'{t} is OPNsense\'s own collector (Reporting > Insight); VyOS has '
-                          'none: point the exporter at an external collector (nfcapd, ntopng, Akvorado)')
         if text(nf, 'activeTimeout'):
             leaf(n, ['active-timeout'], text(nf, 'activeTimeout'))
         if text(nf, 'inactiveTimeout'):
