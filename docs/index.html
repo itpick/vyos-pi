@@ -53,6 +53,9 @@
   th { color: var(--muted); font-weight: 600; font-size: .8rem; }
   td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fine { color: var(--muted); font-size: .85rem; }
+  td.n .fine { white-space: normal; font-size: .78rem; }
+  tr.grp td { background: var(--code); font-weight: 600; font-size: .8rem; padding: 5px 10px; }
+  .startup td.n { white-space: normal; }
   footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
   footer a, p a, li a { color: var(--accent); }
 </style>
@@ -100,14 +103,19 @@
     <tr><td>Router CPU, average</td><td class="n">9&ndash;29%</td><td class="n">pending</td><td class="n">22&ndash;33%</td></tr>
   </table></div>
   <p class="fine">The VyOS column is pending: pi5-1 was on its SD-card Ubuntu while these ran, so that column is Linux on the same board, labelled as such. The OPNsense box is a live router carrying household traffic. The USB 2.5&nbsp;GbE port on the VyOS board had no peer, so it is not tested yet. 940&nbsp;Mbit/s is the Mac's 1&nbsp;GbE limit.</p>
-  <div class="tbl"><table>
-    <tr><th>Boot time, from the reboot command</th><th>VyOS Pi 5</th><th>OPNsense Pi 5 <span class="fine">(7 reboots)</span></th></tr>
-    <tr><td>Kernel starts (shutdown + firmware + loader)</td><td class="n">pending</td><td class="n">36&ndash;38 s</td></tr>
-    <tr><td>Network up (LAN answers)</td><td class="n">pending</td><td class="n">64&ndash;67 s</td></tr>
-    <tr><td>Management up (SSH, web GUI)</td><td class="n">pending</td><td class="n">65&ndash;68 s</td></tr>
-    <tr><td>Ready (config loaded, boot finished)</td><td class="n">pending</td><td class="n">81&ndash;85 s</td></tr>
+  <p class="fine">Method, every run and the raw data: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">Pi 5 comparison</a>.</p>
+
+  <h3 id="startup">Startup: time until traffic flows and until you can manage it</h3>
+  <div class="tbl"><table class="startup">
+    <tr><th></th><th>OPNsense</th><th>VyOS</th><th>NixOS + Rust prototype (sensr)</th></tr>
+    <tr class="grp"><td colspan="4">x86 VM, from <code>virsh start</code></td></tr>
+    <tr><td>Traffic flowing</td><td class="n">14.5 s<br><span class="fine">17.7 s with 1k rules</span></td><td class="n">30.7 s<br><span class="fine">120.6 s with 1k rules</span></td><td class="n">12.4 s</td></tr>
+    <tr><td>UI/API ready</td><td class="n">15.4 s<br><span class="fine">19.4 s with 1k rules</span></td><td class="n">39.4 s<br><span class="fine">&gt;10 min with 1k rules</span></td><td class="n">13.0 s</td></tr>
+    <tr class="grp"><td colspan="4">Pi 5 (real board), from the reboot command</td></tr>
+    <tr><td>Traffic flowing</td><td class="n">64&ndash;67 s</td><td class="n">pending</td><td class="n">not built yet</td></tr>
+    <tr><td>UI ready</td><td class="n">65&ndash;68 s<br><span class="fine">web GUI</span></td><td class="n">pending</td><td class="n">not built yet</td></tr>
   </table></div>
-  <p class="fine">OPNsense figures come from its own boot logs (1&nbsp;s resolution); an external ping watcher, which samples every 5&nbsp;s, saw the first reply 72&ndash;74&nbsp;s after the reboot. Method, every run and the raw data: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">Pi 5 comparison</a>.</p>
+  <p class="fine">x86: <a href="https://github.com/itpick/sensr/blob/main/docs/research/07-performance-evaluation.md">sensr benchmark</a>, median of 5 boots from <code>virsh start</code>, virtio, boot loader delays as shipped; "1k rules" is 1,000 rules plus a 10k-entry table. Pi 5: a 16&nbsp;GB board, timed from the reboot command, so about 36&ndash;38&nbsp;s of shutdown, firmware and loader come before the kernel; OPNsense from its own boot logs over 7 typical reboots (1&nbsp;s resolution), and it keeps starting services until 81&ndash;85&nbsp;s. VyOS has no web UI: for VyOS, "UI/API ready" means its HTTP API (SSH and the CLI otherwise). The VyOS Pi 5 row is pending until the test board boots VyOS by default.</p>
 
   <h3>One-liner (Linux)</h3>
   <p>Writes the Pi 5 image straight to a disk. Replace <code>/dev/sdX</code>; everything on it is erased.</p>
