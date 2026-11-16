@@ -126,6 +126,13 @@ The hook logs to `/var/log/vyos-pi.log`.
 
 [T3871]: https://vyos.dev/T3871
 
+**Coming from OPNsense?** [`scripts/opnsense-to-vyos.py`](scripts/opnsense-to-vyos.py)
+turns an OPNsense `config.xml` into a `config.boot` to start from: interfaces,
+aliases, firewall rules, NAT, DHCP reservations, DNS, WireGuard, NetFlow and
+Suricata, with a notes file listing what it could not carry over.
+[`examples/`](examples/) has a worked example (an opnsense-pi-shaped home
+router) and a table of OPNsense features and their VyOS equivalents.
+
 ### First boot
 
 1. Update the Pi's EEPROM bootloader first (from Raspberry Pi OS: `sudo rpi-eeprom-update -a`).

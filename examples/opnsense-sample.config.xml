@@ -1,0 +1,656 @@
+<?xml version="1.0"?>
+<!--
+  A made-up OPNsense 26.7 config.xml for a home router shaped like opnsense-pi
+  (onboard port = WAN, two USB NICs = LAN and IoT, a guest VLAN on the LAN):
+  the input of scripts/opnsense-to-vyos.py's tests and of
+  examples/home-router.config.boot. Every address, MAC and key in it is fake
+  (documentation ranges, locally administered MACs, random keys).
+-->
+<opnsense>
+  <system>
+    <hostname>router</hostname>
+    <domain>home.example</domain>
+    <timezone>America/Chicago</timezone>
+    <timeservers>0.pool.ntp.org 1.pool.ntp.org</timeservers>
+    <user>
+      <name>root</name>
+      <uid>0</uid>
+      <authorizedkeys>c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSU56UFBUZGZSL3ZZbkpmaUpRQWM3anB2KzByN3RRY2FDZTdST1JGOXNBUHQgYWRtaW5AZXhhbXBsZS5uZXQK</authorizedkeys>
+      <password>$2y$10$notarealhashnotarealhashnotarealhashnotarealhashnot</password>
+    </user>
+    <ssh>
+      <enabled>enabled</enabled>
+      <interfaces>lan</interfaces>
+    </ssh>
+    <webgui>
+      <protocol>https</protocol>
+      <interfaces>lan</interfaces>
+    </webgui>
+  </system>
+  <interfaces>
+    <wan>
+      <if>rp1eth0</if>
+      <enable>1</enable>
+      <ipaddr>dhcp</ipaddr>
+      <ipaddrv6>dhcp6</ipaddrv6>
+      <dhcp6-ia-pd-len>8</dhcp6-ia-pd-len>
+      <blockpriv>1</blockpriv>
+      <blockbogons>1</blockbogons>
+    </wan>
+    <lan>
+      <if>ue0</if>
+      <enable>1</enable>
+      <ipaddr>10.20.0.1</ipaddr>
+      <subnet>24</subnet>
+      <ipaddrv6>track6</ipaddrv6>
+      <track6-interface>wan</track6-interface>
+      <track6-prefix-id>0</track6-prefix-id>
+    </lan>
+    <opt1>
+      <if>ue1</if>
+      <descr>IoT</descr>
+      <enable>1</enable>
+      <ipaddr>10.20.1.1</ipaddr>
+      <subnet>24</subnet>
+    </opt1>
+    <opt2>
+      <if>vlan0.30</if>
+      <descr>Guest</descr>
+      <enable>1</enable>
+      <ipaddr>10.20.30.1</ipaddr>
+      <subnet>24</subnet>
+    </opt2>
+    <wireguard>
+      <internal_dynamic>1</internal_dynamic>
+      <descr>WireGuard (Group)</descr>
+      <if>wireguard</if>
+      <virtual>1</virtual>
+      <enable>1</enable>
+      <type>group</type>
+    </wireguard>
+    <lo0>
+      <if>lo0</if>
+      <ipaddr>127.0.0.1</ipaddr>
+      <subnet>8</subnet>
+      <virtual>1</virtual>
+    </lo0>
+  </interfaces>
+  <vlans>
+    <vlan>
+      <if>ue0</if>
+      <tag>30</tag>
+      <vlanif>vlan0.30</vlanif>
+      <descr>Guest</descr>
+    </vlan>
+  </vlans>
+  <nat>
+    <outbound>
+      <mode>hybrid</mode>
+      <rule>
+        <interface>wan</interface>
+        <descr>WireGuard clients out the WAN</descr>
+        <source>
+          <network>10.99.0.0/24</network>
+        </source>
+        <destination>
+          <any>1</any>
+        </destination>
+        <target/>
+      </rule>
+    </outbound>
+    <rule>
+      <interface>wan</interface>
+      <protocol>tcp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <network>wanip</network>
+        <port>443</port>
+      </destination>
+      <target>WebServer</target>
+      <local-port>443</local-port>
+      <descr>HTTPS to the home server</descr>
+      <natreflection>purenat</natreflection>
+    </rule>
+    <rule>
+      <disabled>1</disabled>
+      <interface>wan</interface>
+      <protocol>udp</protocol>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <network>wanip</network>
+        <port>27015</port>
+      </destination>
+      <target>10.20.0.60</target>
+      <local-port>27015</local-port>
+      <descr>Game server (off)</descr>
+    </rule>
+  </nat>
+  <filter>
+    <rule>
+      <type>pass</type>
+      <ipprotocol>inet</ipprotocol>
+      <descr>Default allow LAN to any rule</descr>
+      <interface>lan</interface>
+      <source>
+        <network>lan</network>
+      </source>
+      <destination>
+        <any/>
+      </destination>
+    </rule>
+    <rule>
+      <type>pass</type>
+      <ipprotocol>inet6</ipprotocol>
+      <descr>Default allow LAN IPv6 to any rule</descr>
+      <interface>lan</interface>
+      <source>
+        <network>lan</network>
+      </source>
+      <destination>
+        <any/>
+      </destination>
+    </rule>
+    <rule>
+      <type>pass</type>
+      <ipprotocol>inet</ipprotocol>
+      <interface>opt1</interface>
+      <source>
+        <network>opt1</network>
+      </source>
+      <destination>
+        <any>1</any>
+      </destination>
+    </rule>
+    <rule>
+      <type>pass</type>
+      <ipprotocol>inet</ipprotocol>
+      <interface>opt2</interface>
+      <source>
+        <network>opt2</network>
+      </source>
+      <destination>
+        <any>1</any>
+      </destination>
+    </rule>
+    <rule>
+      <type>pass</type>
+      <disabled>1</disabled>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp</protocol>
+      <interface>wan</interface>
+      <descr>old SSH forward (off)</descr>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <address>10.20.0.50</address>
+        <port>22</port>
+      </destination>
+    </rule>
+  </filter>
+  <dhcpd>
+    <lan>
+      <enable>0</enable>
+      <range>
+        <from>10.20.0.100</from>
+        <to>10.20.0.199</to>
+      </range>
+    </lan>
+  </dhcpd>
+  <dnsmasq>
+    <enable>0</enable>
+  </dnsmasq>
+  <OPNsense>
+    <Firewall>
+      <Alias>
+        <aliases>
+          <alias uuid="a0000000-0000-4000-8000-000000000001">
+            <enabled>1</enabled>
+            <name>WebServer</name>
+            <type>host</type>
+            <content>10.20.0.50</content>
+            <description>Home server</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000002">
+            <enabled>1</enabled>
+            <name>Printers</name>
+            <type>host</type>
+            <content>10.20.1.40
+10.20.1.41</content>
+            <description>Printers: no internet</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000003">
+            <enabled>1</enabled>
+            <name>BlockedNets</name>
+            <type>network</type>
+            <content>198.51.100.0/24
+203.0.113.0/25</content>
+            <description>Networks nobody inside may reach</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000004">
+            <enabled>1</enabled>
+            <name>SpamhausDROP</name>
+            <type>urltable</type>
+            <updatefreq>1</updatefreq>
+            <content>https://www.spamhaus.org/drop/drop.txt</content>
+            <description>Spamhaus DROP</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000005">
+            <enabled>1</enabled>
+            <name>FeodoTracker</name>
+            <type>urltable</type>
+            <updatefreq>0.5</updatefreq>
+            <content>https://feodotracker.abuse.ch/downloads/ipblocklist.txt</content>
+            <description>abuse.ch Feodo C2 servers</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000006">
+            <enabled>1</enabled>
+            <name>TrustedIoT</name>
+            <type>mac</type>
+            <content>02:00:00:00:10:01
+02:00:00:00:10:02</content>
+            <description>IoT devices allowed to reach the LAN</description>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000007">
+            <enabled>1</enabled>
+            <name>CastPorts</name>
+            <type>port</type>
+            <content>8008:8009
+8443</content>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000008">
+            <enabled>1</enabled>
+            <name>GeoIP_Blocked</name>
+            <type>geoip</type>
+            <content>XX</content>
+          </alias>
+          <alias uuid="a0000000-0000-4000-8000-000000000009">
+            <enabled>0</enabled>
+            <name>OldVPNPeers</name>
+            <type>urltable</type>
+            <updatefreq>1</updatefreq>
+            <content>https://lists.example.net/vpn-peers.txt</content>
+          </alias>
+        </aliases>
+      </Alias>
+      <Filter>
+        <rules>
+          <rule uuid="f0000000-0000-4000-8000-000000000001">
+            <enabled>1</enabled>
+            <sequence>1</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>UDP</protocol>
+            <source_net>any</source_net>
+            <destination_net>wanip</destination_net>
+            <destination_port>51820</destination_port>
+            <log>1</log>
+            <description>WireGuard in</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000002">
+            <enabled>1</enabled>
+            <sequence>2</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>UDP</protocol>
+            <source_net>OldVPNPeers</source_net>
+            <destination_net>wanip</destination_net>
+            <destination_port>1194</destination_port>
+            <description>Old VPN peers (alias disabled)</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000003">
+            <enabled>1</enabled>
+            <sequence>3</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>wan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>GeoIP_Blocked</source_net>
+            <destination_net>any</destination_net>
+            <log>1</log>
+            <description>Block a country (GeoIP)</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000004">
+            <enabled>1</enabled>
+            <sequence>3</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>wireguard</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>any</source_net>
+            <destination_net>any</destination_net>
+            <description>WireGuard clients to anywhere</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000005">
+            <enabled>1</enabled>
+            <sequence>10</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>lan,opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>any</source_net>
+            <destination_net>SpamhausDROP</destination_net>
+            <log>1</log>
+            <description>Block outbound to Spamhaus DROP</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000006">
+            <enabled>1</enabled>
+            <sequence>11</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>lan,opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>any</source_net>
+            <destination_net>FeodoTracker</destination_net>
+            <log>1</log>
+            <description>Block outbound to Feodo C2</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000007">
+            <enabled>1</enabled>
+            <sequence>12</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>lan,opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>any</source_net>
+            <destination_net>BlockedNets</destination_net>
+            <log>1</log>
+            <description>Block outbound to BlockedNets</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000008">
+            <enabled>1</enabled>
+            <sequence>20</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>Printers</source_net>
+            <destination_net>lan</destination_net>
+            <destination_not>1</destination_not>
+            <log>1</log>
+            <description>Printers: nothing but the LAN</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000009">
+            <enabled>1</enabled>
+            <sequence>21</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP/UDP</protocol>
+            <source_net>opt1</source_net>
+            <destination_net>(self)</destination_net>
+            <destination_port>53</destination_port>
+            <description>IoT: DNS to the router</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000010">
+            <enabled>1</enabled>
+            <sequence>22</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>TCP</protocol>
+            <source_net>TrustedIoT</source_net>
+            <destination_net>lan</destination_net>
+            <destination_port>CastPorts</destination_port>
+            <description>Trusted IoT to the LAN (cast ports)</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000011">
+            <enabled>1</enabled>
+            <sequence>23</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>opt1</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>opt1</source_net>
+            <destination_net>lan</destination_net>
+            <log>1</log>
+            <description>IoT: nothing else to the LAN</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000012">
+            <enabled>1</enabled>
+            <sequence>30</sequence>
+            <action>block</action>
+            <quick>1</quick>
+            <interface>opt2</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>opt2</source_net>
+            <destination_net>10.20.0.0/16</destination_net>
+            <log>1</log>
+            <description>Guests: internet only</description>
+          </rule>
+          <rule uuid="f0000000-0000-4000-8000-000000000013">
+            <enabled>0</enabled>
+            <sequence>31</sequence>
+            <action>pass</action>
+            <quick>1</quick>
+            <interface>lan</interface>
+            <direction>in</direction>
+            <ipprotocol>inet</ipprotocol>
+            <protocol>any</protocol>
+            <source_net>lan</source_net>
+            <destination_net>any</destination_net>
+            <gateway>WAN_BACKUP</gateway>
+            <description>Policy route via a backup uplink (off)</description>
+          </rule>
+        </rules>
+      </Filter>
+    </Firewall>
+    <Kea>
+      <dhcp4>
+        <general>
+          <enabled>1</enabled>
+          <interfaces>lan,opt1,opt2</interfaces>
+          <valid_lifetime>7200</valid_lifetime>
+        </general>
+        <subnets>
+          <subnet4 uuid="50000000-0000-4000-8000-000000000001">
+            <subnet>10.20.0.0/24</subnet>
+            <option_data>
+              <domain_name_servers>10.20.0.1</domain_name_servers>
+              <routers>10.20.0.1</routers>
+              <ntp_servers>10.20.0.1</ntp_servers>
+              <domain_name>home.example</domain_name>
+            </option_data>
+            <pools>10.20.0.100-10.20.0.199</pools>
+            <description>LAN</description>
+          </subnet4>
+          <subnet4 uuid="50000000-0000-4000-8000-000000000002">
+            <subnet>10.20.1.0/24</subnet>
+            <option_data>
+              <domain_name_servers>10.20.1.1</domain_name_servers>
+              <routers>10.20.1.1</routers>
+            </option_data>
+            <pools>10.20.1.100-10.20.1.199</pools>
+            <description>IoT</description>
+          </subnet4>
+          <subnet4 uuid="50000000-0000-4000-8000-000000000003">
+            <subnet>10.20.30.0/24</subnet>
+            <pools>10.20.30.100-10.20.30.199</pools>
+            <description>Guest</description>
+          </subnet4>
+        </subnets>
+        <reservations>
+          <reservation uuid="70000000-0000-4000-8000-000000000001">
+            <subnet>50000000-0000-4000-8000-000000000001</subnet>
+            <ip_address>10.20.0.50</ip_address>
+            <hw_address>02:00:00:00:00:50</hw_address>
+            <hostname>server</hostname>
+            <description>Home server</description>
+          </reservation>
+          <reservation uuid="70000000-0000-4000-8000-000000000002">
+            <subnet>50000000-0000-4000-8000-000000000001</subnet>
+            <ip_address>10.20.0.51</ip_address>
+            <hw_address>02:00:00:00:00:51</hw_address>
+            <hostname>nas</hostname>
+          </reservation>
+          <reservation uuid="70000000-0000-4000-8000-000000000003">
+            <subnet>50000000-0000-4000-8000-000000000001</subnet>
+            <ip_address>10.20.0.52</ip_address>
+            <hw_address>02:00:00:00:00:51</hw_address>
+            <hostname>nas-wifi</hostname>
+            <description>same MAC as nas: dropped with a note</description>
+          </reservation>
+          <reservation uuid="70000000-0000-4000-8000-000000000004">
+            <subnet>50000000-0000-4000-8000-000000000002</subnet>
+            <ip_address>10.20.1.40</ip_address>
+            <hw_address>02:00:00:00:01:40</hw_address>
+            <hostname>printer</hostname>
+          </reservation>
+        </reservations>
+      </dhcp4>
+    </Kea>
+    <unboundplus>
+      <general>
+        <enabled>1</enabled>
+        <dnssec>1</dnssec>
+        <regdhcp>1</regdhcp>
+        <regdhcpstatic>1</regdhcpstatic>
+      </general>
+      <dnsbl>
+        <blocklist uuid="d0000000-0000-4000-8000-000000000001">
+          <enabled>1</enabled>
+          <type>hgz003</type>
+        </blocklist>
+      </dnsbl>
+      <dots>
+        <dot uuid="d1000000-0000-4000-8000-000000000001">
+          <enabled>1</enabled>
+          <type>forward</type>
+          <domain>corp.example</domain>
+          <server>192.0.2.53</server>
+        </dot>
+      </dots>
+      <hosts>
+        <host uuid="d2000000-0000-4000-8000-000000000001">
+          <enabled>1</enabled>
+          <hostname>nas</hostname>
+          <domain>home.example</domain>
+          <rr>A</rr>
+          <server>10.20.0.51</server>
+        </host>
+      </hosts>
+    </unboundplus>
+    <wireguard>
+      <general>
+        <enabled>1</enabled>
+      </general>
+      <server>
+        <servers>
+          <server uuid="c0000000-0000-4000-8000-000000000001">
+            <enabled>1</enabled>
+            <name>home</name>
+            <instance>0</instance>
+            <privkey>KJT+GT/UEa5Io3B7Prt6y7dqaP6fGniuUFKdO0XXF1Y=</privkey>
+            <port>51820</port>
+            <tunneladdress>10.99.0.1/24</tunneladdress>
+            <peers>c1000000-0000-4000-8000-000000000001,c1000000-0000-4000-8000-000000000002</peers>
+          </server>
+        </servers>
+      </server>
+      <client>
+        <clients>
+          <client uuid="c1000000-0000-4000-8000-000000000001">
+            <enabled>1</enabled>
+            <name>phone</name>
+            <pubkey>D/De8UyEbUBOnqLKRCUErbVR7YOyvH+yRpQP2WvoRsw=</pubkey>
+            <tunneladdress>10.99.0.2/32</tunneladdress>
+            <keepalive>25</keepalive>
+          </client>
+          <client uuid="c1000000-0000-4000-8000-000000000002">
+            <enabled>1</enabled>
+            <name>laptop</name>
+            <pubkey>SJg0KnIHbyKAFOM0WfNFTwL2HiKvpv6IKUQNCuetooQ=</pubkey>
+            <psk>HBmjrScYZg3qGpeT/dMPLsscBKCwIk/ReASGbhrKx2k=</psk>
+            <tunneladdress>10.99.0.3/32</tunneladdress>
+          </client>
+        </clients>
+      </client>
+    </wireguard>
+    <Netflow>
+      <capture>
+        <interfaces>lan,wan</interfaces>
+        <egress_only>wan</egress_only>
+        <version>v9</version>
+        <targets>192.0.2.50:2055</targets>
+      </capture>
+      <collect>
+        <enable>0</enable>
+      </collect>
+      <activeTimeout>1800</activeTimeout>
+      <inactiveTimeout>15</inactiveTimeout>
+    </Netflow>
+    <Syslog>
+      <destinations>
+        <destination uuid="e0000000-0000-4000-8000-000000000001">
+          <enabled>1</enabled>
+          <transport>udp4</transport>
+          <hostname>10.20.0.50</hostname>
+          <port>514</port>
+        </destination>
+      </destinations>
+    </Syslog>
+    <IDS>
+      <general>
+        <enabled>1</enabled>
+        <mode>pcap</mode>
+        <interfaces>wan</interfaces>
+        <homenet>10.20.0.0/16,10.99.0.0/24</homenet>
+        <eveLog>
+          <http>
+            <enable>0</enable>
+          </http>
+          <tls>
+            <enable>1</enable>
+          </tls>
+        </eveLog>
+      </general>
+    </IDS>
+    <TrafficShaper>
+      <pipes>
+        <pipe uuid="b0000000-0000-4000-8000-000000000001">
+          <bandwidth>900</bandwidth>
+          <bandwidthMetric>Mbit</bandwidthMetric>
+          <scheduler>fq_codel</scheduler>
+          <description>WAN download</description>
+        </pipe>
+      </pipes>
+      <queues/>
+      <rules/>
+    </TrafficShaper>
+    <monit>
+      <general>
+        <enabled>1</enabled>
+      </general>
+    </monit>
+  </OPNsense>
+</opnsense>

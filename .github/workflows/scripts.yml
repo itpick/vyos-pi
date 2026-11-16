@@ -1,0 +1,19 @@
+name: scripts
+
+# Unit tests of the helper scripts (no image build, no VM).
+on:
+  pull_request:
+    paths: ["scripts/**", "tests/**", "examples/**", ".github/workflows/scripts.yml"]
+  push:
+    branches: [main]
+    paths: ["scripts/**", "tests/**", "examples/**", ".github/workflows/scripts.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
