@@ -475,14 +475,15 @@ do_tryboot() {
 }
 
 # The trial's boot partition: from the kernel command line (in VyOS), or --boot.
+# Sets B (not a $(...) subshell: the mount must be undone by this shell).
 open_trial_boot() {
   local id="" dev
-  if [[ -n $boot_dir ]]; then echo "$boot_dir"; return; fi
+  if [[ -n $boot_dir ]]; then B=$boot_dir; return; fi
   for a in $(cat /proc/cmdline); do
     case "$a" in vyos-pi.trial=PARTUUID=*) id=${a#vyos-pi.trial=PARTUUID=} ;; esac
   done
   if [[ -z $id ]]; then
-    if ! in_vyos; then find_boot_dir; return; fi
+    if ! in_vyos; then B=$(find_boot_dir); return; fi
     die "not booted as a trial (no vyos-pi.trial= on the kernel command line); give the card's boot partition with --boot DIR"
   fi
   dev=/dev/disk/by-partuuid/$id
@@ -490,7 +491,7 @@ open_trial_boot() {
   mkdir -p "$tmp/boot"
   mount -t vfat -o rw,noatime "$dev" "$tmp/boot" || die "cannot mount $dev"
   mounts+=("$tmp/boot")
-  echo "$tmp/boot"
+  B=$tmp/boot
 }
 
 # The target's FAT partition: by PARTUUID from trial.env, mounted.
@@ -514,30 +515,40 @@ env_get() { sed -n "s/^$1=//p" "$2" | tail -1; }
 do_commit() {
   local b env
   [[ $(id -u) == 0 ]] || die "run as root (sudo)"
-  b=$(open_trial_boot)
+  open_trial_boot; b=$B
   env=$b/$PREFIX/trial.env
   [[ -f $env ]] || die "no $PREFIX/trial.env on $b: not a vyos-pi trial boot partition"
   if in_vyos && (( ! force )); then
     [[ $(dt_u32 tryboot) == 1 ]] || warn "this boot is not a tryboot (the firmware's flag is not set)"
   fi
   [[ -f $b/config.txt ]] || die "$b/config.txt is already gone (committed?)"
+  # The target must boot on its own: its config.txt, and the overlays the
+  # trial used (images up to 2026.11.16-1 lack them: D0 boards need bcm2712d0).
+  local esp
+  esp=$(env_get TARGET_ESP_PARTUUID "$env")
+  [[ -n $esp ]] && open_target_esp "$esp" || die "cannot open the target's FAT partition (PARTUUID=$esp); not committing"
+  [[ -f $T_DIR/config.txt && -f $T_DIR/vyos-pi/boot/Image && -f $T_DIR/cmdline.txt ]] \
+    || die "the target's FAT partition lacks config.txt, cmdline.txt or vyos-pi/boot/Image; not committing"
+  local ov
+  for ov in "$b/$PREFIX/overlays/"*.dtbo; do
+    [[ -f $ov ]] || continue
+    if [[ ! -f $T_DIR/overlays/${ov##*/} ]]; then
+      mkdir -p "$T_DIR/overlays"
+      cp "$ov" "$T_DIR/overlays/"
+      say "copied overlays/${ov##*/} to the target (its image predates it)"
+    fi
+  done
+  sync
   say "making VyOS the default: the bootloader will find no config.txt on $b and go on to the next BOOT_ORDER device"
   mv "$b/config.txt" "$b/config.txt.vyos-pi-committed"
   if grep -q "^$MARK" "$b/tryboot.txt" 2>/dev/null; then rm -f "$b/tryboot.txt"; fi
   if [[ -f $b/tryboot.txt ]]; then mv "$b/tryboot.txt" "$b/tryboot.txt.vyos-pi-committed"; fi
   sed -i 's/^STATE=.*/STATE=committed/' "$env"
-  sync
-  local esp
-  esp=$(env_get TARGET_ESP_PARTUUID "$env")
-  if [[ -n $esp ]] && open_target_esp "$esp"; then
-    if [[ -f $T_DIR/vyos-pi/trial-armed ]]; then
-      rm -f "$T_DIR/vyos-pi/reboot-after-minutes" "$T_DIR/vyos-pi/trial-armed"
-      say "removed the trial's reboot-after-minutes timer from the target"
-    fi
-    sync
-  else
-    warn "could not open the target's FAT partition (PARTUUID=$esp): delete vyos-pi/reboot-after-minutes on it yourself"
+  if [[ -f $T_DIR/vyos-pi/trial-armed ]]; then
+    rm -f "$T_DIR/vyos-pi/reboot-after-minutes" "$T_DIR/vyos-pi/trial-armed"
+    say "removed the trial's reboot-after-minutes timer from the target"
   fi
+  sync
   echo
   echo "Committed. The next boot skips $b (config.txt is now config.txt.vyos-pi-committed)"
   echo "and starts VyOS from $(env_get TARGET "$env"), if BOOT_ORDER has that device after the"
@@ -548,7 +559,7 @@ do_commit() {
 do_uncommit() {
   local b
   [[ $(id -u) == 0 ]] || die "run as root (sudo)"
-  b=$(open_trial_boot)
+  open_trial_boot; b=$B
   [[ -f $b/config.txt.vyos-pi-committed ]] || die "nothing to undo on $b"
   mv "$b/config.txt.vyos-pi-committed" "$b/config.txt"
   [[ -f $b/tryboot.txt.vyos-pi-committed ]] && mv "$b/tryboot.txt.vyos-pi-committed" "$b/tryboot.txt"

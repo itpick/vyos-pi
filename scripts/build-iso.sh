@@ -171,21 +171,15 @@ trap 'umount "$x/sq" 2>/dev/null; rm -rf "$x"' EXIT
 xorriso -osirrox on -indev "$out/vyos-pi-arm64.iso" -extract /live "$x/live" >/dev/null 2>&1
 cp -L "$x/live/vmlinuz" "$out/boot/vmlinuz"
 cp -L "$x/live/initrd.img" "$out/boot/initrd.img"
-# the boot log (overlay/etc/initramfs-tools) must be in the initramfs
-initrd_list() {
-	case "$(head -c4 "$1" | od -An -tx1 | tr -d ' ')" in
-		28b52ffd) zstd -dc "$1" ;;
-		1f8b*) gzip -dc "$1" ;;
-		fd377a58) xz -dc "$1" ;;
-		*) cat "$1" ;;
-	esac | cpio -it 2>/dev/null
-}
-initrd_files=$(initrd_list "$out/boot/initrd.img")
+mkdir "$x/sq"
+mount -t squashfs -o loop,ro "$x/live/filesystem.squashfs" "$x/sq"
+# The boot log (overlay/etc/initramfs-tools) must be in the initramfs. The
+# image's own zstd decompresses it (the build container has none).
+initrd_files=$(chroot "$x/sq" zstd -dc <"$out/boot/initrd.img" | cpio -it 2>/dev/null) \
+	|| initrd_files=$(gzip -dc <"$out/boot/initrd.img" | cpio -it 2>/dev/null) || true
 for f in bin/vyos-pi-bootlog lib/live/boot/9999-vyos-pi-bootlog.sh scripts/init-top/00-vyos-pi-bootlog scripts/init-premount/vyos-pi-bootlog scripts/init-bottom/vyos-pi-bootlog; do
 	grep -qE "(^|/)$f\$" <<<"$initrd_files" || die "initrd lacks $f (vyos-pi boot log)"
 done
-mkdir "$x/sq"
-mount -t squashfs -o loop,ro "$x/live/filesystem.squashfs" "$x/sq"
 cp "$x"/sq/usr/lib/linux-image-*/broadcom/bcm271*.dtb "$out/boot/dtbs/"
 cp "$x/sq/usr/share/vyos/version.json" "$out/boot/version.json"
 python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$out/boot/version.json" > "$out/boot/version"
