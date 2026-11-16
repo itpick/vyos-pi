@@ -1,0 +1,4 @@
+{"recv_mbps": 265.3, "sent_mbps": 267.0, "retransmits": 517, "dir": "LAN->LAN2", "streams": 1, "t0": 1794839765.45, "t1": 1794839780.813, "wifi_limited": true}
+{"recv_mbps": 261.8, "sent_mbps": 266.9, "retransmits": 932, "dir": "LAN->LAN2", "streams": 4, "t0": 1794839786.884, "t1": 1794839802.223, "wifi_limited": true}
+{"recv_mbps": 410.8, "sent_mbps": 412.5, "retransmits": 3, "dir": "LAN2->LAN", "streams": 1, "t0": 1794839808.289, "t1": 1794839823.636, "wifi_limited": true}
+{"recv_mbps": 411.4, "sent_mbps": 414.6, "retransmits": 842, "dir": "LAN2->LAN", "streams": 4, "t0": 1794839829.7, "t1": 1794839845.17, "wifi_limited": true}

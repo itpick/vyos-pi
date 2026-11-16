@@ -2,7 +2,7 @@ BOARD ?= pi4
 BOARDS := pi4 pi5
 VERSION ?= $(shell date -u +%Y.%m.%d)-dev
 
-.PHONY: help iso image images raw compress vm test-image test-trial test-direct test-upgrade test release clean
+.PHONY: help iso image images raw compress vm test-image test-trial test-direct test-upgrade test test-scripts release clean
 
 help:
 	@echo "make iso [VERSION=..]        arm64 ISO + raw image with the Pi kernel (docker, arm64 host)"
@@ -16,6 +16,7 @@ help:
 	@echo "make test-direct             VM test: boot like a Pi 5 (kernel from the FAT partition)"
 	@echo "make test-upgrade BOARD=.. ISO=..  VM test: add system image, reboot into it"
 	@echo "make test                    image + trial for both boards, direct for pi5"
+	@echo "make test-scripts            unit tests of scripts/ (opnsense-to-vyos.py), no VM"
 	@echo "make release TAG=..          upload out/* to a GitHub release (needs gh)"
 
 iso:
@@ -55,6 +56,9 @@ test-upgrade:
 test:
 	@for b in $(BOARDS); do vm/test.sh image $$b && vm/test.sh trial $$b || exit 1; done
 	vm/test.sh image pi5 && vm/test.sh direct pi5
+
+test-scripts:
+	python3 -m unittest discover -s tests -v
 
 release:
 	@test -n "$(TAG)" || { echo "TAG=... required" >&2; exit 2; }

@@ -1,0 +1,68 @@
+{
+ "enabled_rulesets": [
+  "botcc.rules",
+  "emerging-exploit.rules",
+  "emerging-malware.rules"
+ ],
+ "policies": [],
+ "service": "running",
+ "settings": {
+  "ids": {
+   "general": {
+    "AlertLogrotate": [
+     "W0D23"
+    ],
+    "AlertSaveLogs": "4",
+    "LogPayload": "0",
+    "MPMAlgo": [
+     "ac"
+    ],
+    "UpdateCron": [
+     "4f744c06-6cb8-4b62-bd7b-8a8423a79fe5"
+    ],
+    "defaultPacketSize": "",
+    "detect": {
+     "Profile": [
+      ""
+     ],
+     "toclient_groups": "",
+     "toserver_groups": ""
+    },
+    "divert_listeners": "1",
+    "enabled": "1",
+    "eveLog": {
+     "http": {
+      "dumpAllHeaders": [
+       ""
+      ],
+      "enable": "0",
+      "extended": "0"
+     },
+     "tls": {
+      "custom": [],
+      "enable": "0",
+      "extended": "0",
+      "sessionResumption": "0"
+     }
+    },
+    "homenet": [
+     "10.0.0.0/8",
+     "172.16.0.0/12",
+     "192.168.0.0/16"
+    ],
+    "interfaces": [
+     "wan"
+    ],
+    "mode": [
+     "pcap"
+    ],
+    "promisc": "0",
+    "syslog": "0",
+    "syslog_eve": "0",
+    "verbosity": [
+     ""
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,65 @@
+# Suricata engine-stop summaries and stats.log blocks, 2026-11-16 (UTC).
+# Instances: pid-100809 = original pcap/0 rules (A,B-before); 100733 = pcap + 33k rules (C);
+# 100508 = pcap + rules + WAN/32 in HOME_NET (C2); 100499 = netmap IPS on WAN (D); 100503/100146 = restore.
+2026-11-16T13:09:13+00:00 [100676] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T13:09:14+00:00 [100676] <Notice> -- rp1eth0: packets: 16789044, drops: 1133 (0.01%), invalid chksum: 7
+2026-11-16T13:10:49+00:00 [100539] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T13:10:49+00:00 [100809] <Warning> -- 1 rule files specified, but no rules were loaded!
+2026-11-16T13:10:49+00:00 [100809] <Notice> -- Threads created -> W: 1 FM: 1 FR: 1   Engine started.
+2026-11-16T14:34:18+00:00 [100809] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T14:34:20+00:00 [100809] <Notice> -- rp1eth0: packets: 13188493, drops: 3723 (0.03%), invalid chksum: 0
+2026-11-16T14:38:29+00:00 [100373] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T14:38:39+00:00 [100733] <Notice> -- Threads created -> W: 1 FM: 1 FR: 1   Engine started.
+2026-11-16T14:42:14+00:00 [100733] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T14:42:16+00:00 [100733] <Notice> -- rp1eth0: packets: 2224151, drops: 330976 (14.88%), invalid chksum: 0
+2026-11-16T14:42:16+00:00 [100654] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T14:42:26+00:00 [100508] <Notice> -- Threads created -> W: 1 FM: 1 FR: 1   Engine started.
+2026-11-16T14:44:20+00:00 [100508] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T14:44:21+00:00 [100508] <Notice> -- rp1eth0: packets: 106019, drops: 0 (0.00%), invalid chksum: 0
+2026-11-16T14:44:21+00:00 [100107] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T14:44:31+00:00 [100499] <Notice> -- Threads created -> W: 2 FM: 1 FR: 1   Engine started.
+2026-11-16T14:47:49+00:00 [100499] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T14:47:51+00:00 [100504] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T14:48:02+00:00 [100503] <Notice> -- Threads created -> W: 1 FM: 1 FR: 1   Engine started.
+2026-11-16T14:48:10+00:00 [100503] <Notice> -- Signal Received.  Stopping engine.
+2026-11-16T14:48:12+00:00 [100503] <Notice> -- rp1eth0: packets: 21275, drops: 5302 (24.92%), invalid chksum: 0
+2026-11-16T14:48:12+00:00 [100733] <Notice> -- This is Suricata version 8.0.8 RELEASE running in SYSTEM mode
+2026-11-16T14:48:12+00:00 [100146] <Warning> -- 1 rule files specified, but no rules were loaded!
+2026-11-16T14:48:12+00:00 [100146] <Notice> -- Threads created -> W: 1 FM: 1 FR: 1   Engine started.
+
+# stats.log blocks (capture / ips / alert counters)
+Date: 11/16/2026 -- 14:30:49 (uptime: 0d, 01h 20m 00s)
+capture.kernel_packets                                       | Total                     | 9890803
+capture.kernel_drops                                         | Total                     | 2470
+decoder.pkts                                                 | Total                     | 9891679
+flow.memuse                                                  | Total                     | 7254592
+Date: 11/16/2026 -- 14:34:20 (uptime: 0d, 01h 23m 31s)
+capture.kernel_packets                                       | Total                     | 13192216
+capture.kernel_drops                                         | Total                     | 3723
+decoder.pkts                                                 | Total                     | 13188493
+flow.memuse                                                  | Total                     | 7254592
+Date: 11/16/2026 -- 14:42:15 (uptime: 0d, 00h 03m 46s)
+capture.kernel_packets                                       | Total                     | 2555589
+capture.kernel_drops                                         | Total                     | 330976
+decoder.pkts                                                 | Total                     | 2224151
+flow.memuse                                                  | Total                     | 6834304
+Date: 11/16/2026 -- 14:44:21 (uptime: 0d, 00h 02m 05s)
+capture.kernel_packets                                       | Total                     | 106108
+decoder.pkts                                                 | Total                     | 106019
+detect.alert                                                 | Total                     | 725
+flow.memuse                                                  | Total                     | 6834304
+Date: 11/16/2026 -- 14:47:50 (uptime: 0d, 00h 03m 29s)
+ips.accepted                                                 | Total                     | 1808214
+ips.blocked                                                  | Total                     | 503
+ips.drop_reason.flow_drop                                    | Total                     | 118
+ips.drop_reason.rules                                        | Total                     | 20
+ips.drop_reason.stream_error                                 | Total                     | 365
+capture.kernel_packets                                       | Total                     | 1808717
+decoder.pkts                                                 | Total                     | 1808717
+detect.alert                                                 | Total                     | 1234
+flow.memuse                                                  | Total                     | 6834304
+Date: 11/16/2026 -- 14:48:12 (uptime: 0d, 00h 00m 21s)
+capture.kernel_packets                                       | Total                     | 26513
+capture.kernel_drops                                         | Total                     | 5302
+decoder.pkts                                                 | Total                     | 21275
+flow.memuse                                                  | Total                     | 6834304
