@@ -42,7 +42,10 @@ WAN_MAC=52:54:00:57:41:$mac LAN_MAC=52:54:00:4c:41:$mac MGMT_MAC=52:54:00:4d:47:
 mkdir -p "$dir"
 
 stop() {
-  [[ -f "$dir/qemu.pid" ]] && kill "$(cat "$dir/qemu.pid")" 2>/dev/null || true
+  local pid
+  if [[ -f "$dir/qemu.pid" ]] && pid=$(cat "$dir/qemu.pid") && kill "$pid" 2>/dev/null; then
+    for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+  fi
   "$root/vm/client.sh" "$profile" stop 2>/dev/null || true
   [[ -n "${http_pid:-}" ]] && kill "$http_pid" 2>/dev/null || true
   sleep 2
