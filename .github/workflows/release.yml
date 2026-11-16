@@ -89,8 +89,12 @@ jobs:
       # Saved even when the ISO step fails after the kernel (say, VyOS's package
       # repository is down), so a rerun does not spend the hour on it again.
       # build-iso.sh only creates this directory once every package is built.
+      - name: Kernel packages built?
+        if: always() && steps.existing.outputs.skip != 'true'
+        id: kbuilt
+        run: test -f "$VYOS_PI_WORK/kernel-debs/${{ steps.cfg.outputs.kernel_key }}/done" && echo "yes=true" >>"$GITHUB_OUTPUT" || true
       - name: Save the kernel package cache
-        if: always() && steps.existing.outputs.skip != 'true' && steps.kcache.outputs.cache-hit != 'true' && hashFiles(format('{0}/work/kernel-debs/{1}/done', runner.temp, steps.cfg.outputs.kernel_key)) != ''
+        if: always() && steps.kbuilt.outputs.yes == 'true' && steps.kcache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/work/kernel-debs/${{ steps.cfg.outputs.kernel_key }}
