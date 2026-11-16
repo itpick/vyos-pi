@@ -29,7 +29,7 @@
   .tag { display: inline-block; font-size: .78rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-bottom: 10px; }
   .ok { background: #dcfce7; color: #166534; }
   .vm { background: #e0f2fe; color: #075985; }
-  @media (prefers-color-scheme: dark) { .vm { background: #0c2a3d; color: #7dd3fc; } }
+  @media (prefers-color-scheme: dark) { .vm { background: #0c2a3d; color: #7dd3fc; } .ok { background: #0f2e1a; color: #86efac; } }
   .exp { background: var(--warn-bg); color: var(--warn); }
   .card ul { margin: 0 0 16px; padding-left: 18px; color: var(--muted); font-size: .92rem; flex: 1; }
   .btn { display: block; text-align: center; background: var(--accent); color: var(--accent-fg);
@@ -46,6 +46,16 @@
     border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
   ol { padding-left: 20px; } li { margin: 4px 0; }
   code { background: var(--code); border-radius: 4px; padding: 1px 5px; font-size: .9em; }
+  .tbl { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; background: var(--card); }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fine { color: var(--muted); font-size: .85rem; }
+  td.n .fine { white-space: normal; font-size: .78rem; }
+  tr.grp td { background: var(--code); font-weight: 600; font-size: .8rem; padding: 5px 10px; }
+  .startup td.n { white-space: normal; }
   footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
   footer a, p a, li a { color: var(--accent); }
 </style>
@@ -54,7 +64,7 @@
 <main>
   <h1>VyOS for Raspberry Pi</h1>
   <p class="sub">Flash-and-boot VyOS rolling (arm64) images, built from VyOS's public sources with a Raspberry Pi kernel.</p>
-  <p class="note">Unofficial community build, not affiliated with or supported by VyOS Networks. <strong>Tested in QEMU only so far, not on a real Pi.</strong> Fine for labs; keep a working router nearby.</p>
+  <p class="note">Unofficial community build, not affiliated with or supported by VyOS Networks. <strong>The Pi 5 image has booted on a real Pi 5; the Pi 4 image is tested in QEMU only.</strong> Fine for labs; keep a working router nearby.</p>
 
   <div class="boards">
     <div class="card">
@@ -70,9 +80,10 @@
       <div class="small"><a href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi4.img.xz.sha256">sha256</a></div>
     </div>
     <div class="card">
-      <span class="tag vm">Boots in QEMU &middot; untested on a board</span>
+      <span class="tag ok">Boots on a real Pi 5</span>
       <h2>Raspberry Pi 5</h2>
       <ul>
+        <li>Verified on a 16&nbsp;GB board: onboard RP1 Ethernet at 1&nbsp;Gb/s, USB RTL8156B 2.5&nbsp;GbE (<code>r8152</code>), NVMe boot, root partition grows on first boot</li>
         <li>Boot: Pi EEPROM &rarr; VyOS kernel + initrd directly, mainline device tree (no UEFI)</li>
         <li>Onboard Ethernet: RP1 (<code>macb</code> + mainline RP1 driver)</li>
         <li><code>add system image</code> upgrades: boot files follow on the FAT partition</li>
@@ -82,6 +93,29 @@
       <div class="small"><a href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz.sha256">sha256</a> &middot; <a href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-arm64.iso">upgrade ISO</a></div>
     </div>
   </div>
+
+  <h3 id="pi5-numbers">Pi 5 measurements</h3>
+  <p>iperf3 between a wired 1&nbsp;GbE Mac and the router itself, 15&nbsp;s runs, on 2026-11-16. These measure the NIC, driver and CPU, <strong>not</strong> routing or NAT. Both boards are a Pi 5 with 16&nbsp;GB.</p>
+  <div class="tbl"><table>
+    <tr><th>Mbit/s (TCP, 4 streams)</th><th>Pi 5 eth0, Ubuntu 24.04 <span class="fine">(same board, reference)</span></th><th>Pi 5 eth0, VyOS</th><th>OPNsense Pi 5, LAN on USB RTL8156</th></tr>
+    <tr><td>Into the router</td><td class="n">789</td><td class="n">pending</td><td class="n">600&ndash;612</td></tr>
+    <tr><td>Out of the router</td><td class="n">924</td><td class="n">pending</td><td class="n">931&ndash;932</td></tr>
+    <tr><td>Router CPU, average</td><td class="n">9&ndash;29%</td><td class="n">pending</td><td class="n">22&ndash;33%</td></tr>
+  </table></div>
+  <p class="fine">The VyOS column is pending: pi5-1 was on its SD-card Ubuntu while these ran, so that column is Linux on the same board, labelled as such. The OPNsense box is a live router carrying household traffic. The USB 2.5&nbsp;GbE port on the VyOS board had no peer, so it is not tested yet. 940&nbsp;Mbit/s is the Mac's 1&nbsp;GbE limit.</p>
+  <p class="fine">Method, every run and the raw data: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">Pi 5 comparison</a>.</p>
+
+  <h3 id="startup">Startup: time until traffic flows and until you can manage it</h3>
+  <div class="tbl"><table class="startup">
+    <tr><th></th><th>OPNsense</th><th>VyOS</th><th>NixOS + Rust prototype (sensr)</th></tr>
+    <tr class="grp"><td colspan="4">x86 VM, from <code>virsh start</code></td></tr>
+    <tr><td>Traffic flowing</td><td class="n">14.5 s<br><span class="fine">17.7 s with 1k rules</span></td><td class="n">30.7 s<br><span class="fine">120.6 s with 1k rules</span></td><td class="n">12.4 s</td></tr>
+    <tr><td>UI/API ready</td><td class="n">15.4 s<br><span class="fine">19.4 s with 1k rules</span></td><td class="n">39.4 s<br><span class="fine">&gt;10 min with 1k rules</span></td><td class="n">13.0 s</td></tr>
+    <tr class="grp"><td colspan="4">Pi 5 (real board), from the reboot command</td></tr>
+    <tr><td>Traffic flowing</td><td class="n">64&ndash;67 s</td><td class="n">pending</td><td class="n">not built yet</td></tr>
+    <tr><td>UI ready</td><td class="n">65&ndash;68 s<br><span class="fine">web GUI</span></td><td class="n">pending</td><td class="n">not built yet</td></tr>
+  </table></div>
+  <p class="fine">x86: <a href="https://github.com/itpick/sensr/blob/main/docs/research/07-performance-evaluation.md">sensr benchmark</a>, median of 5 boots from <code>virsh start</code>, virtio, boot loader delays as shipped; "1k rules" is 1,000 rules plus a 10k-entry table. Pi 5: a 16&nbsp;GB board, timed from the reboot command, so about 36&ndash;38&nbsp;s of shutdown, firmware and loader come before the kernel; OPNsense from its own boot logs over 7 typical reboots (1&nbsp;s resolution), and it keeps starting services until 81&ndash;85&nbsp;s. VyOS has no web UI: for VyOS, "UI/API ready" means its HTTP API (SSH and the CLI otherwise). The VyOS Pi 5 row is pending until the test board boots VyOS by default.</p>
 
   <h3>One-liner (Linux)</h3>
   <p>Writes the Pi 5 image straight to a disk. Replace <code>/dev/sdX</code>; everything on it is erased.</p>
