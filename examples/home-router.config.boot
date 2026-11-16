@@ -5,6 +5,11 @@ interfaces {
         description "WAN"
         address "dhcp"
         address "dhcpv6"
+        ipv6 {
+            address {
+                autoconf
+            }
+        }
         dhcpv6-options {
             pd 0 {
                 length "56"
@@ -59,12 +64,17 @@ service {
             address "fc00::/7"
         }
         server 0.pool.ntp.org {
+            pool
         }
         server 1.pool.ntp.org {
+            pool
         }
     }
     router-advert {
         interface eth1 {
+            managed-flag
+            other-config-flag
+            dnssl "home.example"
             prefix ::/64 {
             }
         }
@@ -103,6 +113,7 @@ service {
                 option {
                     default-router "10.20.1.1"
                     name-server "10.20.1.1"
+                    domain-name "home.example"
                 }
                 lease "7200"
                 range 0 {
@@ -122,6 +133,7 @@ service {
                 option {
                     default-router "10.20.30.1"
                     name-server "10.20.30.1"
+                    domain-name "home.example"
                 }
                 lease "7200"
                 range 0 {
@@ -137,6 +149,7 @@ service {
             listen-address "10.20.0.1"
             listen-address "10.20.1.1"
             listen-address "10.20.30.1"
+            listen-address "10.99.0.1"
             allow-from "10.20.0.0/24"
             allow-from "10.20.1.0/24"
             allow-from "10.20.30.0/24"
@@ -295,6 +308,12 @@ system {
         host-name nas.home.example {
             inet "10.20.0.51"
         }
+        host-name router.home.example {
+            inet "10.20.0.1"
+            inet "10.20.1.1"
+            inet "10.20.30.1"
+            inet "10.99.0.1"
+        }
     }
     domain-name "home.example"
     time-zone "America/Chicago"
@@ -363,6 +382,10 @@ firewall {
             network "10.0.0.0/8"
             network "172.16.0.0/12"
             network "192.168.0.0/16"
+        }
+        ipv6-network-group OPN-PRIVATE6 {
+            network "fd00::/8"
+            network "fe80::/10"
         }
         network-group OPN-BOGONS {
             network "0.0.0.0/8"
@@ -476,6 +499,13 @@ firewall {
                 }
                 rule 80 {
                     action "accept"
+                    description "WireGuard clients to anywhere"
+                    inbound-interface {
+                        name "wg0"
+                    }
+                }
+                rule 90 {
+                    action "accept"
                     description "WireGuard in"
                     protocol "udp"
                     log
@@ -486,7 +516,7 @@ firewall {
                         port "51820"
                     }
                 }
-                rule 90 {
+                rule 100 {
                     action "accept"
                     description "Old VPN peers (alias disabled)"
                     protocol "udp"
@@ -501,13 +531,6 @@ firewall {
                     }
                     destination {
                         port "1194"
-                    }
-                }
-                rule 100 {
-                    action "accept"
-                    description "WireGuard clients to anywhere"
-                    inbound-interface {
-                        name "wg0"
                     }
                 }
                 rule 110 {
@@ -665,13 +688,6 @@ firewall {
                     description "port forwards (nat destination)"
                 }
                 rule 40 {
-                    action "accept"
-                    description "WireGuard clients to anywhere"
-                    inbound-interface {
-                        name "wg0"
-                    }
-                }
-                rule 50 {
                     action "drop"
                     description "Block outbound to Spamhaus DROP"
                     log
@@ -684,7 +700,7 @@ firewall {
                         }
                     }
                 }
-                rule 60 {
+                rule 50 {
                     action "drop"
                     description "Block outbound to Feodo C2"
                     log
@@ -697,7 +713,7 @@ firewall {
                         }
                     }
                 }
-                rule 70 {
+                rule 60 {
                     action "drop"
                     description "Block outbound to BlockedNets"
                     log
@@ -708,6 +724,13 @@ firewall {
                         group {
                             network-group "BlockedNets"
                         }
+                    }
+                }
+                rule 70 {
+                    action "accept"
+                    description "WireGuard clients to anywhere"
+                    inbound-interface {
+                        name "wg0"
                     }
                 }
                 rule 80 {
@@ -844,9 +867,79 @@ firewall {
                 rule 20 {
                     action "accept"
                     protocol "ipv6-icmp"
-                    description "ICMPv6 (neighbour discovery, router advertisements)"
+                    icmpv6 {
+                        type-name "destination-unreachable"
+                    }
+                    description "ICMPv6 destination-unreachable"
                 }
                 rule 30 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "packet-too-big"
+                    }
+                    description "ICMPv6 packet-too-big"
+                }
+                rule 40 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "time-exceeded"
+                    }
+                    description "ICMPv6 time-exceeded"
+                }
+                rule 50 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "parameter-problem"
+                    }
+                    description "ICMPv6 parameter-problem"
+                }
+                rule 60 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "nd-router-solicit"
+                    }
+                    description "ICMPv6 nd-router-solicit"
+                }
+                rule 70 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "nd-router-advert"
+                    }
+                    description "ICMPv6 nd-router-advert"
+                }
+                rule 80 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "nd-neighbor-solicit"
+                    }
+                    description "ICMPv6 nd-neighbor-solicit"
+                }
+                rule 90 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "nd-neighbor-advert"
+                    }
+                    description "ICMPv6 nd-neighbor-advert"
+                }
+                rule 100 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "echo-request"
+                    }
+                    source {
+                        address "fe80::/10"
+                    }
+                    description "ICMPv6 echo-request from link-local"
+                }
+                rule 110 {
                     action "accept"
                     protocol "udp"
                     destination {
@@ -857,7 +950,19 @@ firewall {
                     }
                     description "DHCPv6 client on wan"
                 }
-                rule 40 {
+                rule 120 {
+                    action "drop"
+                    inbound-interface {
+                        name "eth0"
+                    }
+                    source {
+                        group {
+                            network-group "OPN-PRIVATE6"
+                        }
+                    }
+                    description "Block private networks on wan"
+                }
+                rule 130 {
                     action "accept"
                     description "Default allow LAN IPv6 to any rule"
                     inbound-interface {
@@ -872,9 +977,48 @@ firewall {
                 rule 10 {
                     action "accept"
                     protocol "ipv6-icmp"
-                    description "ICMPv6"
+                    icmpv6 {
+                        type-name "destination-unreachable"
+                    }
+                    description "ICMPv6 destination-unreachable"
                 }
                 rule 20 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "packet-too-big"
+                    }
+                    description "ICMPv6 packet-too-big"
+                }
+                rule 30 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "time-exceeded"
+                    }
+                    description "ICMPv6 time-exceeded"
+                }
+                rule 40 {
+                    action "accept"
+                    protocol "ipv6-icmp"
+                    icmpv6 {
+                        type-name "parameter-problem"
+                    }
+                    description "ICMPv6 parameter-problem"
+                }
+                rule 50 {
+                    action "drop"
+                    inbound-interface {
+                        name "eth0"
+                    }
+                    source {
+                        group {
+                            network-group "OPN-PRIVATE6"
+                        }
+                    }
+                    description "Block private networks on wan"
+                }
+                rule 60 {
                     action "accept"
                     description "Default allow LAN IPv6 to any rule"
                     inbound-interface {
