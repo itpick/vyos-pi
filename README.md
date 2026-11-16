@@ -28,7 +28,7 @@ The sibling project for OPNsense is [opnsense-pi](https://github.com/itpick/opns
 | AES in hardware | No (BCM2711 has no ARMv8 crypto), so VPNs are CPU-bound | Yes (Cortex-A76) |
 | Fan, temperature | n/a | Fan not driven: mainline 6.18 has no driver for the RP1 PWM it hangs off. Temperature: the SoC sensor and a thermal zone with a critical trip (110 °C) come from vyos-pi's own overlay (`dtoverlay=vyos-pi-thermal`), as the mainline tree has none |
 | HDMI | UEFI's framebuffer | Firmware screens only: the firmware hands the mainline tree no framebuffer and the kernel has no BCM2712 display driver, so the kernel console and login are on the [debug UART](#when-a-pi-5-does-not-come-up) |
-| Clock | no RTC | No RTC driver (mainline 6.18): the clock is wrong until NTP sets it |
+| Clock | no RTC | No RTC driver (mainline 6.18). [`vyos-pi-clock`](overlay/usr/libexec/vyos-pi/vyos-pi-clock) saves the time at shutdown and every 15 minutes and restores it at boot, so NTP's correction is only the time the Pi was off (without it, the months-long step made dhclient drop its lease and the router fell off the network for 8-12 s a minute after boot) |
 | Verdict | Boots and routes in QEMU; untested on hardware | **Boots on a real Pi 5** (16 GB, D0, from NVMe): onboard RP1 `eth0` at 1 Gb/s (DHCP, SSH), a USB RTL8156B (`r8152`) at 1 Gb/s, SD card, NVMe root grown to the disk. Boots and routes in QEMU, both through GRUB and the direct path |
 
 VyOS here is the rolling train: a snapshot of VyOS development on the day of
@@ -98,8 +98,8 @@ What brings the old OS back, by stage:
 | VyOS gets stuck in... | What resets the board | After |
 |---|---|---|
 | the firmware, the kernel's first second | the hardware watchdog (`kernel_watchdog_timeout`; the firmware starts it, the kernel feeds it) | ~15 s |
-| a kernel panic | `panic=10` | 10 s |
-| the initramfs, root not found | live-boot gives up after 60 s, then `panic=10` (no shell) | ~70 s |
+| a kernel panic | the 10 s panic timeout the initramfs sets (or, before the initramfs, the watchdog) | 10-15 s |
+| the initramfs, root not found | live-boot gives up after 60 s, then reboots (no shell) | ~70 s |
 | a hang before systemd takes the watchdog | `watchdog.open_timeout` (= `kernel_watchdog_timeout`, default 300 s) | 5 min |
 | VyOS up but unreachable | the trial timer (`vyos-pi/reboot-after-minutes` on the target, `--trial-minutes`, default 30) | 30 min |
 
@@ -151,7 +151,7 @@ leave it in):
   `vyos-pi.bootlog=` in `cmdline.txt`). One file per stage, `<boot>-<stage>.txt`:
   `initramfs-top` (first thing in the initramfs), `initramfs` (before the root
   is searched), `initramfs-panic` (the root was not found; written before
-  `panic=10` reboots), `initramfs-done`, `early` (systemd up), `running` (VyOS
+  the reboot), `initramfs-done`, `early` (systemd up), `running` (VyOS
   loaded its config), `shutdown`. Each has the command line, the firmware's
   boot flags (`tryboot`, `partition`), block devices, modules, live-boot's log
   and the kernel log; the userspace ones also the journal. No file at all means
@@ -169,9 +169,15 @@ leave it in):
   only the firmware's screens: the firmware gives the mainline device tree no
   framebuffer, so there is no kernel console or login there.
 
-**Why stalls reboot now.** `cmdline.txt` has `panic=10` (the kernel reboots
-10 s after a panic; initramfs-tools and live-boot reboot instead of starting a
-shell when the root is missing), and VyOS's GRUB boot options get it too.
+**Why stalls reboot now.** The first thing vyos-pi's initramfs does is set a
+10 s panic timeout: the kernel reboots 10 s after a panic, and initramfs-tools
+and live-boot reboot instead of starting a shell when the root is missing
+(their `panic` setting, through `/conf/param.conf`). Not `panic=10` on the
+command line: VyOS manages that kernel option (`system option kernel panic`)
+and, finding one it did not set, tries at every boot to kexec into a command
+line without it, which fails on the Pi 5 ("Commit error"). vyos-pi also turns
+that boot-time kexec off where there is no EFI (the Pi 5's firmware boot:
+VyOS asks for a reboot instead).
 `config.txt` has `kernel_watchdog_timeout=300`: the firmware starts the
 BCM2712's hardware watchdog before the kernel and passes
 `watchdog.open_timeout=300`; the kernel's `bcm2835-wdt` (built in) feeds it
@@ -427,7 +433,7 @@ make test-trialboot          # pi-trial-install.sh against disk images: tryboot.
                              # vyos-pi-trial/; boot it like the firmware would, VyOS
                              # comes up from the "NVMe", boot logs on the "SD card";
                              # --commit / --uncommit from VyOS; then a missing root
-                             # reboots by itself (panic=10) with a boot log
+                             # reboots by itself (10 s panic timeout) with a boot log
 make test                    # image + trial for both boards, direct for pi5
 ```
 

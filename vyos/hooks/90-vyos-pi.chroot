@@ -9,7 +9,8 @@ chmod 755 /usr/libexec/vyos-pi/* \
 	/etc/initramfs-tools/hooks/vyos-pi-bootlog /etc/initramfs-tools/scripts/init-top/00-vyos-pi-bootlog \
 	/etc/initramfs-tools/scripts/init-premount/vyos-pi-bootlog \
 	/etc/initramfs-tools/scripts/init-bottom/vyos-pi-bootlog
-systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service vyos-pi-bootlog.service
+systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service vyos-pi-bootlog.service \
+	vyos-pi-clock.service vyos-pi-clock-save.timer
 
 # VyOS applies changed kernel options ("system option kernel ...") at boot by
 # kexec'ing /boot/vmlinuz with the new command line. On the Pi 5 there is no

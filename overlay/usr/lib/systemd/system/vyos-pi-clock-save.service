@@ -1,0 +1,6 @@
+[Unit]
+Description=vyos-pi: save the clock (restored at the next boot)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/vyos-pi/vyos-pi-clock save

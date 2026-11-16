@@ -20,7 +20,7 @@ A fresh card or disk, nothing else to keep (erases the target; or Raspberry Pi I
 curl -fL https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz | xz -dc | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
-Pi 5: the console is the 3-pin debug UART (115200); HDMI shows only the firmware's screens. Boots that fail reboot instead of hanging (`panic=10`, the hardware watchdog from the firmware on), and leave boot logs in `vyos-pi/boot-log/` on the FAT partition.
+Pi 5: the console is the 3-pin debug UART (115200); HDMI shows only the firmware's screens. Boots that fail reboot instead of hanging (a 10 s panic timeout, the hardware watchdog from the firmware on), and leave boot logs in `vyos-pi/boot-log/` on the FAT partition.
 
 Log in as `vyos` / `vyos`. Each image's contents: `vyos-pi-<board>.manifest.txt`. The default config, to seed from (`vyos-pi/config.boot` on the FAT partition, see `scripts/seed-config.py`): `vyos-pi.config.boot.default`.
 

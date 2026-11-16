@@ -1,0 +1,36 @@
+#!/bin/sh
+# vyos-pi-clock restore|save: keep the clock roughly right across reboots.
+#
+# The Pi has no RTC that mainline Linux can read, so without this every boot
+# starts at systemd's build-time clock (months behind), and when chrony then
+# steps it to the real time, dhclient finds its lease long expired: it removes
+# the address and asks again, and the router is off the network for a few
+# seconds a minute or so after it came up (seen on a Pi 5: 8-12 s). Like
+# Debian's fake-hwclock: save the time at shutdown and every 15 minutes
+# (vyos-pi-clock.service, vyos-pi-clock-save.timer), and at boot, before
+# anything uses the network, move the clock forward to the saved time (or to
+# the image's build time, whichever is later). Then the step chrony makes is
+# only the time the Pi was off.
+STATE=/var/lib/vyos-pi/clock
+BUILT=/usr/share/vyos-pi/manifest.txt
+
+case "${1:-}" in
+	restore)
+		now=$(date +%s)
+		saved=$(tr -cd '0-9' <"$STATE" 2>/dev/null)
+		built=$(stat -c %Y "$BUILT" 2>/dev/null)
+		t=${saved:-0}
+		[ "${built:-0}" -gt "$t" ] && t=$built
+		if [ "$t" -gt "$now" ]; then
+			date -s "@$t" >/dev/null && echo "vyos-pi-clock: clock set forward to $(date -u '+%Y-%m-%dT%H:%M:%SZ') (saved/build time)"
+		fi
+		;;
+	save)
+		mkdir -p "${STATE%/*}"
+		date +%s >"$STATE.new" && mv "$STATE.new" "$STATE"
+		;;
+	*)
+		echo "usage: $0 restore|save" >&2
+		exit 2
+		;;
+esac

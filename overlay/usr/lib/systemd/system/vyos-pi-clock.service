@@ -1,0 +1,17 @@
+[Unit]
+Description=vyos-pi: restore the clock saved at the last shutdown (no RTC)
+Documentation=https://github.com/itpick/vyos-pi#board-status
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target time-set.target chrony.service vyos-router.service shutdown.target
+Wants=time-set.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/vyos-pi/vyos-pi-clock restore
+ExecStop=/usr/libexec/vyos-pi/vyos-pi-clock save
+
+[Install]
+WantedBy=sysinit.target

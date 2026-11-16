@@ -5,12 +5,15 @@ After=local-fs.target vyos-router.service
 ConditionKernelCommandLine=vyos-pi.bootlog
 
 [Service]
-Type=oneshot
+# Once VyOS has loaded its config (vyos-router.service is Type=simple, so
+# wait for its status file; without blocking the boot: Type=simple), and
+# again at shutdown.
+Type=simple
 RemainAfterExit=yes
-# once VyOS has loaded its config, and again at shutdown
-ExecStart=/usr/libexec/vyos-pi/vyos-pi-bootlog running
+ExecStart=/bin/sh -c 'i=0; while [ ! -e /tmp/vyos-config-status ] && [ $$i -lt 600 ]; do sleep 1; i=$$((i+1)); done; exec /usr/libexec/vyos-pi/vyos-pi-bootlog running'
 ExecStop=/usr/libexec/vyos-pi/vyos-pi-bootlog shutdown
-TimeoutSec=2min
+TimeoutStartSec=12min
+TimeoutStopSec=2min
 
 [Install]
 WantedBy=vyos.target
