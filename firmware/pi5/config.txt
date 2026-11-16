@@ -25,5 +25,8 @@ uart_2ndstage=1
 # 5 minutes - resets the board. Needs a 2025 or later bootloader EEPROM
 # (rpi-eeprom-update); older ones ignore it.
 kernel_watchdog_timeout=300
+# The SoC temperature sensor and a thermal zone (critical trip only; the fan is
+# not driven), which the mainline tree lacks: overlays/vyos-pi-thermal.dtbo.
+dtoverlay=vyos-pi-thermal
 
 [all]

@@ -16,8 +16,9 @@
 #     mainline device tree (no UEFI; see README "Pi 5 boot path"), staged by
 #     overlay/.../vyos-pi-bootsync, the same code that keeps them current on
 #     the running system. GRUB stays on the ESP for VMs and UEFI boards.
-#     overlays/bcm2712d0.dtbo (firmware/pi5/bcm2712d0-overlay.dts): the
-#     firmware applies it on D0 boards to the C1 tree it always loads.
+#     overlays/ from firmware/pi5/*-overlay.dts: bcm2712d0.dtbo, which the
+#     firmware applies on D0 boards to the C1 tree it always loads, and
+#     vyos-pi-thermal.dtbo (temperature sensor, config.txt dtoverlay=).
 #   - both: vyos-pi/ with README.txt and config.boot.default, where
 #     first-boot settings go
 #
@@ -98,10 +99,15 @@ for v in want:
     cp firmware/pi5/config.txt "$stage/config.txt"
     command -v dtc >/dev/null || { echo "needs dtc (device-tree-compiler)" >&2; exit 1; }
     mkdir -p "$stage/overlays"
-    dtc -q -@ -I dts -O dtb -o "$stage/overlays/bcm2712d0.dtbo" firmware/pi5/bcm2712d0-overlay.dts
-    printf '%s\n' "vyos-pi: device tree overlays for the Pi 5 firmware (bcm2712d0.dtbo:" \
-      "mainline's D0 changes, applied by the firmware on D0 boards). See" \
-      "firmware/pi5/bcm2712d0-overlay.dts at https://github.com/itpick/vyos-pi" >"$stage/overlays/README"
+    for src in firmware/pi5/*-overlay.dts; do
+      n=$(basename "$src" -overlay.dts)
+      dtc -q -@ -I dts -O dtb -o "$stage/overlays/$n.dtbo" "$src"
+      echo "   overlays/$n.dtbo"
+    done
+    printf '%s\n' "vyos-pi: device tree overlays for the Pi 5 firmware, for the mainline" \
+      "device tree: bcm2712d0.dtbo (D0 boards; the firmware applies it itself)," \
+      "vyos-pi-thermal.dtbo (config.txt). Sources: firmware/pi5/*-overlay.dts at" \
+      "https://github.com/itpick/vyos-pi" >"$stage/overlays/README"
     # the ESP's GPT partition UUID: cmdline.txt sends the boot log there
     esp_uuid=$(sfdisk -J "$img" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["uuid"].lower())')
     python3 -I overlay/usr/libexec/vyos-pi/vyos-pi-bootsync --stage "$stage" --version "$version" \

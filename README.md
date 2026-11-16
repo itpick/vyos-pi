@@ -24,12 +24,12 @@ The sibling project for OPNsense is [opnsense-pi](https://github.com/itpick/opns
 | Onboard Ethernet | `bcmgenet` (matched over ACPI); built, not yet seen on a board | RP1 GEM: `macb` + mainline RP1 driver (`MISC_RP1`): link at 1000 Mb/s, DHCP, SSH on a real board |
 | SD card | `sdhci-iproc` (ACPI), built in | `sdhci-brcmstb`, built in; works (SDR104) |
 | NVMe | n/a | `pcie-brcmstb` + `nvme`, built in: VyOS's root on NVMe works |
-| USB NICs | RTL8153/RTL8156 (`r8152`), AX88179 (`ax88179_178a`): VyOS's own kernel modules | same |
+| USB NICs | RTL8153/RTL8156 (`r8152`), AX88179 (`ax88179_178a`): VyOS's own kernel modules | same; RTL8156B seen working at 1 Gb/s on a board |
 | AES in hardware | No (BCM2711 has no ARMv8 crypto), so VPNs are CPU-bound | Yes (Cortex-A76) |
-| Fan | n/a | Not driven: mainline 6.18 has no driver for the RP1 PWM the fan hangs off |
+| Fan, temperature | n/a | Fan not driven: mainline 6.18 has no driver for the RP1 PWM it hangs off. Temperature: the SoC sensor and a thermal zone with a critical trip (110 °C) come from vyos-pi's own overlay (`dtoverlay=vyos-pi-thermal`), as the mainline tree has none |
 | HDMI | UEFI's framebuffer | Firmware screens only: the firmware hands the mainline tree no framebuffer and the kernel has no BCM2712 display driver, so the kernel console and login are on the [debug UART](#when-a-pi-5-does-not-come-up) |
 | Clock | no RTC | No RTC driver (mainline 6.18): the clock is wrong until NTP sets it |
-| Verdict | Boots and routes in QEMU; untested on hardware | Boots on a real 16 GB (D0) Pi 5 from NVMe: RP1 Ethernet, USB NICs (`r8152`), SD card, NVMe root grown to the disk; routing not yet tried there. Boots and routes in QEMU, both through GRUB and the direct path |
+| Verdict | Boots and routes in QEMU; untested on hardware | **Boots on a real Pi 5** (16 GB, D0, from NVMe): onboard RP1 `eth0` at 1 Gb/s (DHCP, SSH), a USB RTL8156B (`r8152`) at 1 Gb/s, SD card, NVMe root grown to the disk. Boots and routes in QEMU, both through GRUB and the direct path |
 
 VyOS here is the rolling train: a snapshot of VyOS development on the day of
 the build, not an LTS release.

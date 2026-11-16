@@ -210,16 +210,19 @@ write_trial_files() {  # BOOTDIR TARGET ROOT_UUID ESP_UUID BOOT_UUID
   # $PREFIX/overlays/ when $PREFIX/overlays/README exists (else from the old
   # OS's overlays/, whose bcm2712d0.dtbo is for Raspberry Pi's own tree and
   # leaves the mainline one with the C1 pin controller: SError at boot).
+  # vyos-pi-thermal: the temperature sensor (tryboot.txt dtoverlay=).
   mkdir -p "$tmp/overlays"
-  if t_has overlays/bcm2712d0.dtbo; then
-    t_get overlays/bcm2712d0.dtbo "$tmp/overlays/bcm2712d0.dtbo"
-  else
-    local src
-    src=$(dirname "$0")/../firmware/pi5/bcm2712d0-overlay.dts
+  local ov src
+  for ov in bcm2712d0 vyos-pi-thermal; do
+    if t_has "overlays/$ov.dtbo"; then
+      t_get "overlays/$ov.dtbo" "$tmp/overlays/$ov.dtbo"
+      continue
+    fi
+    src=$(dirname "$0")/../firmware/pi5/$ov-overlay.dts
     [[ -f $src ]] && command -v dtc >/dev/null \
-      || die "the target has no overlays/bcm2712d0.dtbo (images up to 2026.11.16-1); run this from a vyos-pi checkout with dtc installed (apt install device-tree-compiler)"
-    dtc -q -@ -I dts -O dtb -o "$tmp/overlays/bcm2712d0.dtbo" "$src"
-  fi
+      || die "the target has no overlays/$ov.dtbo (images up to 2026.11.16-1); run this from a vyos-pi checkout with dtc installed (apt install device-tree-compiler)"
+    dtc -q -@ -I dts -O dtb -o "$tmp/overlays/$ov.dtbo" "$src"
+  done
   # The firmware only starts the watchdog (kernel_watchdog_timeout) for a
   # device tree with a "watchdog" alias to a node with "early-watchdog";
   # images from this version on have it, older ones get it here if
@@ -244,7 +247,7 @@ write_trial_files() {  # BOOTDIR TARGET ROOT_UUID ESP_UUID BOOT_UUID
     cp "$tmp/${f##*/}" "$d/${f##*/}.new" && mv "$d/${f##*/}.new" "$d/${f##*/}"
   done
   mkdir -p "$d/overlays"
-  cp "$tmp/overlays/bcm2712d0.dtbo" "$d/overlays/bcm2712d0.dtbo"
+  cp "$tmp/overlays/"*.dtbo "$d/overlays/"
   echo "vyos-pi trial: overlays for the trial's mainline device tree (this README makes the firmware use this folder)" >"$d/overlays/README"
 
   # VyOS's command line from the target, for the trial:
@@ -323,6 +326,8 @@ EOF
     echo "# debug UART (3-pin header): firmware and kernel messages from the start"
     echo "enable_uart=1"
     echo "uart_2ndstage=1"
+    echo "# the SoC temperature sensor (the mainline tree has none)"
+    echo "dtoverlay=vyos-pi-thermal"
     if (( watchdog > 0 )); then
       echo "# hardware watchdog through to systemd: a boot that hangs resets the"
       echo "# board, and that boots config.txt again"

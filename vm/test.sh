@@ -419,7 +419,7 @@ case "$test" in
     for want in 'os_prefix=vyos-pi-trial/' 'kernel=Image' 'initramfs initrd.img followkernel' 'cmdline=cmdline.txt' 'kernel_watchdog_timeout=300'; do
       grep -qxF "$want" "$sdfat/tryboot.txt" || fail "tryboot.txt lacks $want"
     done
-    for f in Image initrd.img bcm2712-rpi-5-b.dtb bcm2712d0-rpi-5-b.dtb cmdline.txt trial.env overlays/bcm2712d0.dtbo overlays/README pi-trial-install.sh; do
+    for f in Image initrd.img bcm2712-rpi-5-b.dtb bcm2712d0-rpi-5-b.dtb cmdline.txt trial.env overlays/bcm2712d0.dtbo overlays/vyos-pi-thermal.dtbo overlays/README pi-trial-install.sh; do
       [[ -s $sdfat/vyos-pi-trial/$f ]] || fail "vyos-pi-trial/$f missing"
     done
     grep -q '^# the old OS' "$sdfat/config.txt" || fail "config.txt was changed"
