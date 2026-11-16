@@ -120,11 +120,28 @@ client_login() {
 }
 client_sh() { C "$1" '__END__\r?\n.*# ' "$2; echo __EN''D__" | tr -d '\r' | sed -n '1d; /^__END__$/q; p'; }
 
+# Start the VM; if no kernel starts within 8 minutes, start it once more
+# (QEMU's UEFI under TCG has been seen to spin forever before GRUB).
+start_vm() {
+  local n0 attempt
+  for attempt in 1 2; do
+    n0=$(grep -ac 'Booting Linux' "$dir/console.log" 2>/dev/null || true)
+    "$root/vm/run.sh" "--$profile" --headless "$@"
+    for _ in $(seq 96); do
+      (( $(grep -ac 'Booting Linux' "$dir/console.log" 2>/dev/null || echo 0) > ${n0:-0} )) && return 0
+      sleep 5
+    done
+    echo "W: no kernel within 8 minutes (attempt $attempt); restarting the VM"
+    stop
+  done
+  return 1
+}
+
 boot_seeded() {
   seed
   local img
   img=$(test_image "config.boot=$dir/config.boot" "$@")
-  "$root/vm/run.sh" "--$profile" --headless --reset --image "$img"
+  start_vm --reset --image "$img" || fail "the VM never started a kernel"
   wait_ssh || fail "SSH with the seeded key never worked (seed not applied, or MGMT not eth2?)"
 }
 
@@ -219,7 +236,7 @@ case "$test" in
   direct)
     [[ $profile == pi5 ]] || fail "direct boot is the Pi 5 path"
     [[ -f "$dir/vyos.qcow2" ]] || fail "run vm/test.sh image pi5 first"
-    "$root/vm/run.sh" --pi5 --headless --direct --image "$(cat "$dir/base")"
+    start_vm --direct --image "$(cat "$dir/base")" || fail "direct boot: no kernel"
     wait_ssh || fail "direct boot (kernel+initrd+cmdline.txt from the FAT partition) never came up"
     wait_ready || fail "vyos-router never became active"
     cmd=$(vsh 'cat /proc/cmdline')
@@ -234,7 +251,7 @@ case "$test" in
     iso=${3:-}
     [[ -f "$iso" ]] || fail "usage: vm/test.sh upgrade $profile ISO (another vyos-pi ISO, a different version)"
     [[ -f "$dir/vyos.qcow2" ]] || fail "run vm/test.sh image $profile first"
-    "$root/vm/run.sh" "--$profile" --headless --image "$(cat "$dir/base")"
+    start_vm --image "$(cat "$dir/base")" || fail "the VM never started a kernel"
     wait_ssh || fail "SSH never worked"
     wait_ready || fail "vyos-router never became active"
     before=$(vsh 'cat /proc/cmdline' | grep -oE 'vyos-union=/boot/[^ ]+' | cut -d/ -f3)
@@ -263,7 +280,7 @@ case "$test" in
       vsh "sudo /usr/libexec/vyos-pi/vyos-pi-bootsync --check" || fail "FAT partition boot files do not match $new"
       ok "vyos-pi-bootsync moved the Pi 5 boot files to $new"
       stop
-      "$root/vm/run.sh" --pi5 --headless --direct --image "$(cat "$dir/base")"
+      start_vm --direct --image "$(cat "$dir/base")" || fail "direct boot: no kernel"
       wait_ssh || fail "direct boot after the upgrade never came up"
       running=$(vsh 'cat /proc/cmdline' | grep -oE 'vyos-union=/boot/[^ ]+' | cut -d/ -f3)
       [[ "$running" == "$new" ]] || fail "direct boot started $running, expected $new"
