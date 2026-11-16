@@ -1,0 +1,17 @@
+Translation notes (opnsense-to-vyos.py)
+
+- [ipv6] wan: prefix delegation /56 to eth1 with router advertisements (check the length your ISP delegates)
+- [aliases] GeoIP_Blocked: GeoIP alias not translated; use "source geoip country-code XX" on the rules or a remote-group
+- [aliases] OldVPNPeers: disabled in OPNsense (matches nothing there); rules that use it are written disabled
+- [nat] port forward "HTTPS to the home server": NAT reflection (purenat) not translated (VyOS: an extra destination rule on the LAN side plus a source rule, or split DNS)
+- [dhcp] reservation 10.20.0.52 (nas-wifi) repeats an IP or MAC already reserved in 10.20.0.0/24 (Kea refuses that); skipped
+- [firewall] "Block a country (GeoIP)" (ipv4): alias GeoIP_Blocked (geoip) not translatable; skipped
+- [firewall] "Policy route via a backup uplink (off)": policy routing via WAN_BACKUP not translated (VyOS: policy route)
+- [dns] Unbound resolves recursively; so does the PowerDNS recursor without name-servers
+- [dns] DNS blocklists (Unbound DNSBL) have no VyOS equivalent: point clients at a blocker (AdGuard Home, Pi-hole) or forward to a filtering resolver
+- [dns] DHCP lease registration: "service dhcp-server hostfile-update" puts leases and reservations into /etc/hosts, which the recursor serves
+- [netflow] egress-only capture on wan approximated by enable-egress (all exporting interfaces)
+- [ids] Suricata IDS on eth0, HOME_NET 10.20.0.0/16, 10.99.0.0/24. Rules come from suricata-update (ET Open by default), not from OPNsense's ruleset and policy choices: run "update suricata" once after the first commit; a daily task-scheduler job keeps them current. Mind the memory on a 2-4 GB Pi
+- [gap] traffic shaper pipes/queues/rules not translated (VyOS: qos policy shaper / fq-codel / cake)
+- [gap] monit not translated (VyOS: service monitoring prometheus/telegraf)
+- [interfaces] NIC names pinned by hw-id: the interfaces section is marked version 34 so VyOS turns them into its slot map on the first load
