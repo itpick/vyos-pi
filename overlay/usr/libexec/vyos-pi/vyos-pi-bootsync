@@ -195,8 +195,11 @@ def cmdline(version: str, boot_opts: str = '', esp_partuuid: str = '') -> str:
     plus the Pi 5's consoles, panic= and the boot log (vyos-pi-bootlog) on the
     FAT partition itself."""
     opts = (boot_opts or BOOT_OPTS_STEM + version).split()
-    if not any(o.startswith('panic=') for o in opts):
-        opts.append(PANIC)
+    # panic= goes after GRUB's options wherever GRUB has it (images installed
+    # by vyos-build's raw image step have none, later ones have it in the
+    # middle), so the build and the running system write the same file
+    panic = [o for o in opts if o.startswith('panic=')][-1:] or [PANIC]
+    opts = [o for o in opts if not o.startswith('panic=')] + panic
     opts += [EARLYCON] + CONSOLES.split()
     if esp_partuuid:
         opts.append(f'vyos-pi.bootlog=PARTUUID={esp_partuuid.lower()}:{BOOTLOG_DIR}')

@@ -106,7 +106,24 @@ schedule_reboot() {
 	systemctl start --no-block vyos-pi-trial.service
 }
 
+# panic=10 in GRUB's boot options of every installed image (Pi 4; the Pi 5
+# boots cmdline.txt, which has it anyway). VyOS's own installer has it
+# (vyos/hooks/90-vyos-pi.chroot); the image's first entry, written by
+# vyos-build's raw image step, does not.
+grub_panic() {
+	local f dir
+	dir=$(/opt/vyatta/sbin/vyos-persistpath 2>/dev/null)/boot/grub/grub.cfg.d/vyos-versions
+	for f in "$dir"/*.cfg; do
+		[ -f "$f" ] || continue
+		grep -q '^[[:space:]]*set boot_opts="' "$f" || continue
+		grep -q '^[[:space:]]*set boot_opts="[^"]*panic=' "$f" && continue
+		sed -i 's/^\([[:space:]]*set boot_opts="[^"]*\)vyos-union=/\1panic=10 vyos-union=/' "$f" \
+			&& log "grub: panic=10 added to the boot options in ${f##*/}"
+	done
+}
+
 grow_root
+grub_panic
 
 if mount_esp; then
 	dir=$ESP_MNT/vyos-pi

@@ -239,6 +239,8 @@ case "$test" in
     vsh 'systemctl is-active getty@tty1' || fail "no login prompt on tty1 (HDMI)"
     ok "login prompt on tty1 (what HDMI shows)"
     if [[ $profile == pi5 ]]; then
+      # (after vyos-pi-bootsync.service's own run at boot)
+      for _ in $(seq 30); do [[ "$(vsh 'systemctl show -p SubState --value vyos-pi-bootsync')" == exited ]] && break; sleep 5; done
       vsh 'sudo /usr/libexec/vyos-pi/vyos-pi-bootsync --check' || fail "Pi 5 boot files on the FAT partition do not match the running image"
       ok "Pi 5 direct-boot files on the FAT partition match the running image"
     fi
