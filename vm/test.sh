@@ -15,7 +15,7 @@
 #                                 source NAT (seen in conntrack). pi5: the
 #                                 direct-boot files on the FAT partition match
 #                                 the running image.
-#   vm/test.sh trial   [pi5|pi4]  reboot-after-minutes=3: it reboots by itself,
+#   vm/test.sh trial   [pi5|pi4]  reboot-after-minutes=12: it reboots by itself,
 #                                 with diagnostics saved to the FAT partition
 #   vm/test.sh direct  [pi5]      after "image": boot the same disk the way a
 #                                 Pi 5 does (kernel, initrd and cmdline.txt from
@@ -197,15 +197,16 @@ case "$test" in
     vsh 'head -40 /usr/share/vyos-pi/manifest.txt'
     ;;
   trial)
-    echo 3 >"$dir/reboot-after-minutes"
+    # Long enough for a boot under TCG (~7 minutes to a loaded config) plus the checks.
+    echo 12 >"$dir/reboot-after-minutes"
     boot_seeded "reboot-after-minutes=$dir/reboot-after-minutes"
-    vsh 'grep -q "rebooting in 3 minutes" /var/log/vyos-pi.log' || fail "boot hook did not schedule the reboot"
+    vsh 'grep -q "rebooting in 12 minutes" /var/log/vyos-pi.log' || fail "boot hook did not schedule the reboot"
     ok "reboot scheduled"
     for _ in $(seq 180); do
-      [[ "$(vsh 'grep -c "rebooting in 3 minutes" /var/log/vyos-pi.log' 2>/dev/null || true)" -ge 2 ]] && break
+      [[ "$(vsh 'grep -c "rebooting in 12 minutes" /var/log/vyos-pi.log' 2>/dev/null || true)" -ge 2 ]] && break
       sleep 10
     done
-    [[ "$(vsh 'grep -c "rebooting in 3 minutes" /var/log/vyos-pi.log')" -ge 2 ]] || fail "it never rebooted by itself"
+    [[ "$(vsh 'grep -c "rebooting in 12 minutes" /var/log/vyos-pi.log')" -ge 2 ]] || fail "it never rebooted by itself"
     vsh 'grep "reboot-after-minutes" /var/log/vyos-pi.log'
     ok "rebooted by itself and scheduled the next one"
     vsh 'sudo bash -c ". /usr/libexec/vyos-pi/common.sh; mount_esp; d=\$ESP_MNT/vyos-pi; ls -l \$d; grep -q \"stage boot\" \$d/diag-boot.txt && grep -q \"stage reboot\" \$d/diag-reboot.txt && grep -q \"^### ip addr\" \$d/diag-reboot.txt; r=\$?; umount_esp; exit \$r"' \
