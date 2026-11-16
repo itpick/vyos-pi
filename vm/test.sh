@@ -87,15 +87,22 @@ www_up() {
   http_pid=$!
   sleep 2
 }
-# Wait until Suricata has loaded its rules and runs its packet threads,
-# looking at suricata.log after line $1 (suricata_mark gives the count).
-suricata_mark() { vsh 'sudo cat /var/log/suricata/suricata.log 2>/dev/null | wc -l'; }
+# Wait until a Suricata process other than $1 (suricata_mark: the running
+# one's pid) has loaded its rules, asking it over its unix socket. (VyOS's
+# Suricata logs to eve.json only, so there is no suricata.log to read.)
+suricata_mark() { vsh 'cat /run/suricata/suricata.pid 2>/dev/null || echo none'; }
 suricata_ready() {
+  local pid
   for _ in $(seq 120); do
-    vsh "sudo tail -n +$(($1 + 1)) /var/log/suricata/suricata.log 2>/dev/null | grep -qiE 'threads are running|engine started'" && return 0
+    pid=$(vsh 'cat /run/suricata/suricata.pid 2>/dev/null' || true)
+    if [[ -n "$pid" && "$pid" != "$1" ]] &&
+      vsh 'sudo suricatasc -c ruleset-stats /run/suricata/suricata.socket 2>/dev/null' | grep -qE '"rules_loaded": [1-9]'; then
+      vsh 'sudo suricatasc -c ruleset-stats /run/suricata/suricata.socket'
+      return 0
+    fi
     sleep 5
   done
-  vsh 'sudo tail -20 /var/log/suricata/suricata.log' >&2
+  vsh 'sudo journalctl -u suricata --no-pager | tail -20' >&2
   return 1
 }
 
@@ -275,13 +282,12 @@ case "$test" in
     vsh 'grep -q "sid:2100498;" /var/lib/suricata/rules/suricata.rules' || fail "update suricata did not fetch ET Open (sid 2100498 missing)"
     ok "update suricata fetched ET Open: $rules alert rules"
     suricata_ready "$m0" || fail "Suricata never finished loading the rules"
-    vsh 'sudo grep -E "rules successfully loaded|signatures processed" /var/log/suricata/suricata.log | tail -2'
-    # testmynids.org serves "uid=0(root) gid=0(root) groups=0(root)"; same page, locally
+    # testmynids.org used to serve "uid=0(root) gid=0(root) groups=0(root)"
+    # (the domain is parked now); the same page, served from the WAN side
     www_up
     mkdir -p "$dir/www/uid" && echo 'uid=0(root) gid=0(root) groups=0(root)' >"$dir/www/uid/index.html"
     echo ok >"$dir/www/ok.txt"
     vsh "curl -s http://10.0.2.2:$port/uid/index.html"
-    vsh 'curl -s -m 15 http://testmynids.org/uid/index.html' || true
     for _ in $(seq 24); do
       vsh 'sudo grep -q "\"signature_id\":2100498" /var/log/suricata/eve.json' && break
       sleep 5

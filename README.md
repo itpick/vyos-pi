@@ -149,9 +149,12 @@ commit; save; exit
 update suricata        # fetch ET Open with suricata-update, restart Suricata
 ```
 
-Alerts go to `/var/log/suricata/eve.json`. To check it:
-`curl http://testmynids.org/uid/index.html` from or through the router raises
-sid 2100498 ("GPL ATTACK_RESPONSE id check returned root").
+Alerts go to `/var/log/suricata/eve.json`. The classic check,
+`curl http://testmynids.org/uid/index.html`, no longer works (the domain is
+parked as of November 2026); serve a page containing
+`uid=0(root) gid=0(root) groups=0(root)` from any web server beyond the
+router and fetch it: sid 2100498 ("GPL ATTACK_RESPONSE id check returned
+root") fires. `vm/test.sh ids` does exactly that.
 
 **IPS** (vyos-pi addition). VyOS starts Suricata with af-packet only; vyos-pi's
 drop-in ([`suricata-start`](overlay/usr/libexec/vyos-pi/suricata-start)) can
