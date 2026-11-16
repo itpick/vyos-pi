@@ -133,6 +133,56 @@ Suricata, with a notes file listing what it could not carry over.
 [`examples/`](examples/) has a worked example (an opnsense-pi-shaped home
 router) and a table of OPNsense features and their VyOS equivalents.
 
+### IDS and IPS (Suricata)
+
+VyOS rolling ships [Suricata](https://suricata.io/) (7.0.10, from Debian
+bookworm-backports) and suricata-update, and configures them with
+`service suricata`. It is off until configured. In VyOS's own mode it is an
+IDS: af-packet capture on the listed interfaces, alerts only.
+
+IDS on the WAN with the ET Open rules (or seed it: `seed-config.py ... --ids eth1`,
+which also sets every address and port group the ET Open rules use):
+
+```
+configure
+set service suricata interface eth1
+set service suricata address-group home-net address 192.168.1.0/24
+set service suricata address-group external-net group '!home-net'
+set service suricata port-group http-ports port 80
+# ... the other groups ET Open references: see scripts/seed-config.py --ids
+set service suricata log eve filename eve.json
+set service suricata log eve type alert
+commit; save; exit
+update suricata        # fetch ET Open with suricata-update, restart Suricata
+```
+
+Alerts go to `/var/log/suricata/eve.json`. The classic check,
+`curl http://testmynids.org/uid/index.html`, no longer works (the domain is
+parked as of November 2026); serve a page containing
+`uid=0(root) gid=0(root) groups=0(root)` from any web server beyond the
+router and fetch it: sid 2100498 ("GPL ATTACK_RESPONSE id check returned
+root") fires. `vm/test.sh ids` does exactly that.
+
+**IPS** (vyos-pi addition). VyOS starts Suricata with af-packet only; vyos-pi's
+drop-in ([`suricata-start`](overlay/usr/libexec/vyos-pi/suricata-start)) can
+run it on NFQUEUE instead, with every packet the router forwards (all
+interfaces) queued to it from an nftables table that sits ahead of VyOS's
+firewall:
+
+```
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips          # fail open (default)
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips closed   # drop traffic while Suricata is down
+sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ids          # back to VyOS's af-packet IDS
+```
+
+The mode is kept in `/config/vyos-pi/suricata.conf`, so it survives reboots and
+upgrades. ET Open rules only alert; list the ones to enforce in
+`/etc/suricata/drop.conf` (sids or `re:` patterns, suricata-update's syntax)
+and run `update suricata` again. The router's own traffic is not queued (only
+forwarded traffic is); "service suricata interface" still has to name at least
+one interface for VyOS to start the service. Throughput on a Pi is untested:
+the VM says nothing about it (see below).
+
 ### First boot
 
 1. Update the Pi's EEPROM bootloader first (from Raspberry Pi OS: `sudo rpi-eeprom-update -a`).
@@ -218,7 +268,7 @@ Every boot is logged to `.work/vm/<profile>/console.log` (`VYOS_PI_VM_DIR`
 moves `.work/vm`). Attach to a headless VM's console:
 `socat -,raw,echo=0,escape=0x1d UNIX-CONNECT:.work/vm/pi5/console.sock` (Ctrl-] detaches).
 
-Last runs (nixtop: x86_64 host, aarch64 under TCG; local builds 2026.11.16-dev1 to -dev3, the same pipeline as CI):
+Last runs (nixtop: x86_64 host, aarch64 under TCG; local builds 2026.11.16-dev1 to -dev4, the same pipeline as CI; release 2026.11.16-1's images passed `image` (both) and `direct`):
 
 | Check | Pi 4 profile | Pi 5 profile |
 |---|---|---|
@@ -231,6 +281,9 @@ Last runs (nixtop: x86_64 host, aarch64 under TCG; local builds 2026.11.16-dev1 
 | Login prompt on tty1 (HDMI) | pass | pass |
 | LAN client: DHCP lease from Kea, DNS through the forwarder, HTTP to the WAN side through SNAT (conntrack `src=192.168.1.100 … dst=10.0.2.15`) | pass | pass |
 | `reboot-after-minutes` reboots by itself (12 min), diagnostics on the FAT partition | pass | pass |
+| Suricata installed (7.0.10) and not running until configured | pass | pass |
+| IDS: `service suricata` on the WAN, `update suricata` (ET Open, 53,439 rules enabled), alert 2100498 for the id-check page | pass | pass |
+| IPS: NFQUEUE mode, 2100498 made a drop rule: the LAN client's fetch is blocked (`action: blocked`), other traffic flows | pass | pass |
 | Direct boot, as on a Pi 5: kernel, initrd and `cmdline.txt` from the FAT partition, no UEFI/GRUB | n/a | pass |
 | `add system image` of another vyos-pi ISO, reboot into it with the config, FAT boot files follow, direct boot starts it | not run | pass (dev1 → dev2) |
 

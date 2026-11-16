@@ -1,0 +1,21 @@
+#!/bin/bash
+# vyos-pi-suricata-mode ids|ips [open|closed]: choose how Suricata runs
+# (see /usr/libexec/vyos-pi/suricata-start), keep it in
+# /config/vyos-pi/suricata.conf (carried over by "add system image"), and
+# restart Suricata if "service suricata" is configured.
+#   sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips
+set -e
+mode=${1:-}
+fail=${2:-open}
+case "$mode" in ids|ips) ;; *) echo "usage: $0 ids|ips [open|closed]" >&2; exit 2 ;; esac
+case "$fail" in open|closed) ;; *) echo "usage: $0 ids|ips [open|closed]" >&2; exit 2 ;; esac
+[ "$(id -u)" = 0 ] || { echo "run it with sudo" >&2; exit 1; }
+mkdir -p /config/vyos-pi
+printf 'MODE=%s\nQUEUE=0\nFAIL=%s\n' "$mode" "$fail" > /config/vyos-pi/suricata.conf
+echo "Suricata mode: $mode (fail $fail)"
+if [ -f /run/suricata/suricata.yaml ]; then
+	systemctl restart suricata
+	systemctl is-active suricata
+else
+	echo "service suricata is not configured yet; the mode applies once it is"
+fi
