@@ -83,13 +83,14 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         run: |
           mkdir -p "$VYOS_PI_WORK"
+          trap 'sudo chown -R "$(id -u):$(id -g)" "$VYOS_PI_WORK/kernel-debs" || true' EXIT
           scripts/container.sh scripts/build-iso.sh "${{ steps.cfg.outputs.version }}"
-          sudo chown -R "$(id -u):$(id -g)" "$VYOS_PI_WORK/kernel-debs" || true
           df -h /
-      # Saved right away, so a later failing step does not cost the next run
-      # the hour the kernel takes.
+      # Saved even when the ISO step fails after the kernel (say, VyOS's package
+      # repository is down), so a rerun does not spend the hour on it again.
+      # build-iso.sh only creates this directory once every package is built.
       - name: Save the kernel package cache
-        if: steps.existing.outputs.skip != 'true' && steps.kcache.outputs.cache-hit != 'true'
+        if: always() && steps.existing.outputs.skip != 'true' && steps.kcache.outputs.cache-hit != 'true' && hashFiles(format('{0}/work/kernel-debs/{1}/done', runner.temp, steps.cfg.outputs.kernel_key)) != ''
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/work/kernel-debs/${{ steps.cfg.outputs.kernel_key }}
