@@ -1,0 +1,41 @@
+# opnsense-pi reboot / outage investigation, collected read-only 2026-11-16 ~14:50 UTC
+# Sources: router-watch.log (this Mac, CST = UTC-6), /var/log/system/*.log, /var/log/audit/*.log,
+# /var/log/opnsense-pi.log on the router. Public addresses redacted.
+
+## Boots seen in /var/log/system (UTC). "orderly" = rc stop scripts + "syslog-ng shutting down"
+## logged before ---<<BOOT>>---; "NONE" = no shutdown logged (crash / power loss / hard reset).
+2025-06-11T13:53:53  NONE, "/ was not properly dismounted"   (clock not yet set: real time ~2026-11-15 14:24Z)
+2025-06-11T13:53:54  NONE, "/ was not properly dismounted"   (real time ~2026-11-15 14:28Z)
+2026-11-15T15:22:06  orderly
+2026-11-16T01:44:00  orderly   rp1eth-rollback: "WAN up with new rp1_eth.ko, keeping it"
+2026-11-16T01:51:08  orderly   rp1eth-rollback: new rp1_eth.ko kept
+2026-11-16T02:09:15  orderly   rp1eth-rollback: new rp1_eth.ko kept
+2026-11-16T02:24:44  orderly   rp1eth-rollback: new rp1_eth.ko kept
+2026-11-16T02:30:59  orderly   rp1eth-rollback: new rp1_eth.ko kept
+2026-11-16T02:37:20  orderly   rp1eth-rollback: new rp1_eth.ko kept
+2026-11-16T03:49:22  NONE, "/ was not properly dismounted"
+2026-11-16T04:01:26  orderly   urex-check: "test kernel up, LAN and Wi-Fi LAN answer"
+2026-11-16T13:10:18  orderly   preceded by root SSH from 192.168.69.20 running /tmp/a.php
+                               ("changed configuration ... /tmp/a.php made changes" 13:08:22Z),
+                               shutdown began 13:09:12Z
+
+## router-watch.log DOWN events on 2026-11-15 (CST) mapped to the above
+08:24, 08:26           -> the two unclean boots (uptime ~1 min, router clock reset to 2025-06-11:
+                          no RTC battery and NTP not synced yet at boot)
+08:35, 08:37, 08:49    -> NOT reboots (uptime kept counting: 9m36s, 11m36s, 25m53s); LAN-side
+                          ping loss only
+09:21                  -> orderly boot 15:22Z
+19:43 ... 22:00 (8x)   -> the 8 boots 01:44Z-04:01Z: 7 orderly (driver/kernel test cycle), 1 unclean (21:48 CST = 03:49Z)
+
+## Who/what triggers the orderly reboots
+root SSH logins 2026-11-14..16: 1995 from 192.168.69.20 (a second address on the test Mac's en7,
+i.e. other automation sessions on that Mac), 5 from 192.168.72.124, 2 from 192.168.72.22.
+Config pushes via /tmp/iso2.php, iso3.php, iso4.php (04:28-04:30Z) and /tmp/a.php (13:08Z).
+/usr/local/sbin/rp1eth-rollback: one-shot after installing a new rp1_eth.ko; reboots only if WAN dead.
+/usr/local/sbin/rp1eth0-watchdog (cron, every minute): bounces rp1eth0 when the gateway stops
+answering; its comment says rp1_eth stops receiving after promiscuous-mode changes (Suricata start,
+tcpdump, link events). Last bounces: 13:30:35Z, 13:31:26Z, 13:34:35Z (before this test window).
+/var/crash holds only "minfree": no kernel dumps for the 3 unclean resets.
+
+## During the benchmark window (14:15-14:51Z)
+No reboot (uptime continuous from 13:10Z), no rp1eth0-watchdog bounce, no router-watch DOWN.
