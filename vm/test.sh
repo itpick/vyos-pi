@@ -428,7 +428,7 @@ case "$test" in
     root_uuid=$(sfdisk -J "$target" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][1]["uuid"].lower())')
     cmd=$(cat "$sdfat/vyos-pi-trial/cmdline.txt")
     echo "trial cmdline: $cmd"
-    for want in "live-media=/dev/disk/by-partuuid/$root_uuid" persistence-storage=filesystem panic=10 \
+    for want in "live-media=/dev/disk/by-partuuid/$root_uuid" persistence-storage=filesystem \
         "vyos-pi.trial=PARTUUID=$sd_part" "vyos-pi.bootlog=PARTUUID=$sd_part:/vyos-pi-trial/boot-log," console=ttyAMA10,115200 vyos-union=/boot/; do
       [[ " $cmd " == *" $want"* ]] || fail "trial cmdline lacks $want"
     done

@@ -11,15 +11,16 @@ chmod 755 /usr/libexec/vyos-pi/* \
 	/etc/initramfs-tools/scripts/init-bottom/vyos-pi-bootlog
 systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service vyos-pi-bootlog.service
 
-# Boots that cannot find their root reboot instead of waiting at an
-# (initramfs) shell nobody can reach: panic=10 in the boot options VyOS writes
-# to GRUB for every image it installs (initramfs-tools and live-boot honour
-# it; so does the kernel). The Pi 5's cmdline.txt (vyos-pi-bootsync) has it too.
-echo "I: vyos-pi: panic=10 in VyOS's GRUB boot options"
-grub_py=/usr/lib/python3/dist-packages/vyos/system/grub.py
-grep -q "^BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'" "$grub_py"
-sed -i "s|^BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'|BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 panic=10 vyos-union=/boot/'|" "$grub_py"
-grep -q "biosdevname=0 panic=10 vyos-union=" "$grub_py"
+# VyOS applies changed kernel options ("system option kernel ...") at boot by
+# kexec'ing /boot/vmlinuz with the new command line. On the Pi 5 there is no
+# EFI and the firmware, not GRUB, loads a different kernel file (cmdline.txt,
+# device tree fixups), so that kexec fails ("Commit error" at every boot) and
+# could not work anyway. Without EFI, skip it: VyOS then asks for a reboot.
+echo "I: vyos-pi: no boot-time kexec without EFI (Pi 5 direct boot)"
+opt_py=/usr/libexec/vyos/conf_mode/system_option.py
+grep -q "if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD'):" "$opt_py"
+sed -i "s|if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD'):|if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD') and os.path.isdir('/sys/firmware/efi'):|" "$opt_py"
+grep -q "os.getenv('VYOS_CONFIGD') and os.path.isdir('/sys/firmware/efi'):" "$opt_py"
 
 # The boot log in the initramfs (etc/initramfs-tools/hooks/vyos-pi-bootlog).
 # live-build may build the initramfs again later; scripts/build-iso.sh checks

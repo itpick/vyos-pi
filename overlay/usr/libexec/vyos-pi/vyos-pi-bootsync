@@ -11,7 +11,7 @@ config.txt on the FAT partition and loads, from that partition,
                             overlays/bcm2712d0.dtbo (from the image build) to it
   bcm2712d0-rpi-5-b.dtb     mainline's D0 tree, in case a firmware loads it
   cmdline.txt               the kernel command line GRUB would have used, plus
-                            the Pi 5's consoles, panic=10 and the boot log
+                            the Pi 5's consoles and the boot log
 
 VyOS only knows GRUB: "add system image" and "set system image default-boot"
 change GRUB's default. This copies the default image's files to the FAT
@@ -41,8 +41,7 @@ import sys
 import tempfile
 import time
 
-# VyOS's, as vyos/hooks/90-vyos-pi.chroot patches it (panic=10)
-BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 panic=10 vyos-union=/boot/'
+BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'
 # Pi 5 debug UART (3-pin header) is ttyAMA10 with the mainline device tree
 # (PL011 at 0x107d001000, also the device tree's stdout-path); HDMI is tty1.
 # Kernel messages go to every console=; the last one is /dev/console, which
@@ -50,9 +49,10 @@ BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 
 # from the first instruction (earlycon) whatever the firmware does with HDMI.
 EARLYCON = 'earlycon=pl011,0x107d001000,115200n8'
 CONSOLES = 'console=tty1 console=ttyAMA10,115200'
-# Reboot 10 s after a kernel panic, or when the initramfs cannot find VyOS
-# (initramfs-tools and live-boot honour panic= instead of starting a shell).
-PANIC = 'panic=10'
+# No panic= here: VyOS manages that kernel option ("system option kernel
+# panic") and, finding one it did not set, tries to kexec into a command line
+# without it at every boot. The initramfs sets the panic timeout instead
+# (/etc/initramfs-tools/scripts/init-top/00-vyos-pi-bootlog).
 BOOTLOG_DIR = '/vyos-pi/boot-log'
 # mainline file name -> name(s) the Pi 5 firmware looks for
 DTBS = {
@@ -192,14 +192,9 @@ def kernel_image(data: bytes) -> bytes:
 
 def cmdline(version: str, boot_opts: str = '', esp_partuuid: str = '') -> str:
     """What GRUB passes (BOOT_IMAGE is how VyOS tells which image is running),
-    plus the Pi 5's consoles, panic= and the boot log (vyos-pi-bootlog) on the
-    FAT partition itself."""
+    plus the Pi 5's consoles and the boot log (vyos-pi-bootlog) on the FAT
+    partition itself."""
     opts = (boot_opts or BOOT_OPTS_STEM + version).split()
-    # panic= goes after GRUB's options wherever GRUB has it (images installed
-    # by vyos-build's raw image step have none, later ones have it in the
-    # middle), so the build and the running system write the same file
-    panic = [o for o in opts if o.startswith('panic=')][-1:] or [PANIC]
-    opts = [o for o in opts if not o.startswith('panic=')] + panic
     opts += [EARLYCON] + CONSOLES.split()
     if esp_partuuid:
         opts.append(f'vyos-pi.bootlog=PARTUUID={esp_partuuid.lower()}:{BOOTLOG_DIR}')

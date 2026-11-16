@@ -15,7 +15,7 @@
 #   tryboot.txt        os_prefix=vyos-pi-trial/: the VyOS kernel, initrd and
 #                      device trees, copied from the target disk
 #   vyos-pi-trial/     those files; cmdline.txt (VyOS's root on the target
-#                      disk, panic=10, consoles, the boot log); trial.env;
+#                      disk, consoles, the boot log); trial.env;
 #                      boot-log/ (vyos-pi-bootlog writes here during the trial,
 #                      so a failed trial is readable from the old OS)
 # and on the target disk's FAT partition, vyos-pi/reboot-after-minutes (VyOS
@@ -263,8 +263,8 @@ write_trial_files() {  # BOOTDIR TARGET ROOT_UUID ESP_UUID BOOT_UUID
   # - persistence-storage=filesystem: find VyOS's persistence partition by
   #   its label only; live-boot otherwise mounts every partition (the old
   #   OS's root too, read-write) looking for persistence files
-  # - panic=10: kernel panics, and an initramfs that cannot find the root,
-  #   reboot (to the old OS) after 10 s instead of waiting at a shell
+  # - (no panic=: VyOS would kexec to remove it; vyos-pi's initramfs sets a
+  #   10 s panic timeout, so panics and a missing root reboot - to the old OS)
   # - earlycon on the debug UART, consoles on HDMI and the UART (last: gets
   #   the initramfs's and systemd's messages)
   # - vyos-pi.bootlog=: boot logs to this partition and the target's
@@ -278,7 +278,7 @@ write_trial_files() {  # BOOTDIR TARGET ROOT_UUID ESP_UUID BOOT_UUID
     esac
   done
   [[ " ${opts[*]} " == *" vyos-union=/boot/"* ]] || die "the target's cmdline.txt has no vyos-union= (not a vyos-pi Pi 5 image?)"
-  opts+=("live-media=/dev/disk/by-partuuid/$root_uuid" persistence-storage=filesystem panic=10
+  opts+=("live-media=/dev/disk/by-partuuid/$root_uuid" persistence-storage=filesystem
     earlycon=pl011,0x107d001000,115200n8 console=tty1 console=ttyAMA10,115200 log_buf_len=8M
     "vyos-pi.bootlog=PARTUUID=$boot_uuid:/$PREFIX/boot-log,PARTUUID=$esp_uuid:/vyos-pi/boot-log"
     "vyos-pi.trial=PARTUUID=$boot_uuid")

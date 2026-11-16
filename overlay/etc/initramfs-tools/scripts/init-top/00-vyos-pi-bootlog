@@ -1,9 +1,22 @@
 #!/bin/sh
-# vyos-pi: boot log to the FAT partition(s) named by vyos-pi.bootlog= as soon
-# as the initramfs runs, before udev: proof the kernel got this far, with its
-# log so far, even if what follows hangs.
+# vyos-pi, first thing in the initramfs:
+# - reboot instead of hanging: unless the command line sets panic=, a kernel
+#   panic reboots after 10 s (kernel.panic), and so does initramfs-tools /
+#   live-boot when VyOS's root is not found (their "panic" variable, through
+#   /conf/param.conf, which init reads after every script), instead of an
+#   (initramfs) shell nobody can reach. Not panic= on the command line: VyOS
+#   manages that option and would kexec to remove it.
+# - boot log to the FAT partition(s) named by vyos-pi.bootlog=, before udev:
+#   proof the kernel got this far, with its log so far.
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0 ;; esac
+case " $(cat /proc/cmdline) " in
+	*" panic="*) ;;
+	*)
+		echo 10 >/proc/sys/kernel/panic
+		echo "panic=10" >>/conf/param.conf
+		;;
+esac
 [ -x /bin/vyos-pi-bootlog ] && /bin/vyos-pi-bootlog initramfs-top </dev/null
 exit 0
