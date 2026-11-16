@@ -48,14 +48,20 @@ stop() {
   sleep 2
 }
 ok() { echo "PASS: $*"; }
-fail() { echo "FAIL: $*" >&2; [[ -f "$dir/console.log" ]] && tail -c 3000 "$dir/console.log" | tr -d '\r' >&2; stop; exit 1; }
+# KEEP=1: leave the VMs running after a failure, to look around
+fail() {
+  echo "FAIL: $*" >&2
+  [[ -f "$dir/console.log" ]] && tail -c 3000 "$dir/console.log" | tr -d '\r' | sed 's/^/console: /' >&2
+  [[ -n "${KEEP:-}" ]] || stop
+  exit 1
+}
 
 # Run a shell script as vyos over SSH (MGMT port). vsh 'cmd' / op 'show ...'
 vsh() {
   ssh -q -i "$dir/id_test" -p "$ssh" -o BatchMode=yes -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 vyos@127.0.0.1 /bin/bash -s <<<"$1"
 }
-op() { vsh "/bin/vbash -c 'source /opt/vyatta/etc/functions/script-template; run $1'"; }
+op() { vsh "/opt/vyatta/bin/vyatta-op-cmd-wrapper $1"; }
 wait_ssh() {
   local n=${1:-240}
   for _ in $(seq "$n"); do vsh true 2>/dev/null && return 0; sleep 5; done
@@ -101,16 +107,15 @@ seed() {
 C() { python3 -I "$root/vm/console.py" "$dir/client.sock" "$@"; }
 client_login() {
   for _ in $(seq 60); do
-    case "$(tail -c 200 "$dir/client.log" 2>/dev/null | tr -d '\r')" in
-      *"login: ") C 20 'Password: ' cirros >/dev/null || true ;;
-      *"Password: ") C 30 '\$ $' gocubsgo >/dev/null || true ;;
-      *'$ ') return 0 ;;
-      *) C 5 'login: $' '' >/dev/null || true; sleep 5 ;;
+    case "$(tail -c 200 "$dir/client.log" 2>/dev/null | tr -d '\r' | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g')" in
+      *"login: ") C 30 '# $' root >/dev/null || true ;;
+      *'# ') return 0 ;;
+      *) sleep 5 ;;
     esac
   done
   return 1
 }
-client_sh() { C "$1" '__END__\r?\n.*\$ ' "$2; echo __EN''D__" | tr -d '\r' | sed -n '1d; /^__END__$/q; p'; }
+client_sh() { C "$1" '__END__\r?\n.*# ' "$2; echo __EN''D__" | tr -d '\r' | sed -n '1d; /^__END__$/q; p'; }
 
 boot_seeded() {
   seed
@@ -120,10 +125,11 @@ boot_seeded() {
   wait_ssh || fail "SSH with the seeded key never worked (seed not applied, or MGMT not eth2?)"
 }
 
-stop
+[[ -n "${REUSE_VM:-}" ]] || stop
 case "$test" in
   image)
-    boot_seeded
+    # REUSE_VM=1: run the checks against the VM a previous run left up
+    if [[ -n "${REUSE_VM:-}" ]]; then wait_ssh 2 || fail "REUSE_VM: no VM answers on ssh"; else boot_seeded; fi
     ok "SSH as vyos with the key from the seeded config.boot (MGMT port)"
     wait_ready || fail "vyos-router never became active"
     [[ "$(vsh hostname)" == vyos-pi-test ]] || fail "hostname is $(vsh hostname), not the seeded one"
@@ -150,9 +156,10 @@ case "$test" in
     vsh 'grep -E "^CONFIG_(MISC_RP1|MACB|BCMGENET|MMC_SDHCI_BRCMSTB|MMC_SDHCI_IPROC|BCM2712_MIP)=" /boot/config-$(uname -r)' | tee "$dir/kconfig.txt"
     [[ $(wc -l <"$dir/kconfig.txt") -eq 6 ]] || fail "running kernel lacks the Raspberry Pi options"
     ok "show version reports vyos-pi (flavor raspberrypi), running the Pi kernel ($(vsh 'uname -r'))"
-    vsh 'sudo modprobe macb && sudo modprobe bcmgenet && sudo modprobe ipt_NETFLOW && sudo modprobe jool && lsmod | grep -E "^(macb|genet|bcmgenet|ipt_NETFLOW|jool) "' \
+    mods="macb genet ipt_NETFLOW jool nf_nat_rtsp ipoe vlan_mon"
+    vsh "for m in $mods; do sudo modprobe \$m || exit 1; done; lsmod | grep -E '^(${mods// /|}) '" \
       || fail "Pi Ethernet drivers or the rebuilt out-of-tree modules do not load (signature/symbol mismatch?)"
-    ok "Pi Ethernet drivers (macb, bcmgenet) and rebuilt out-of-tree modules (ipt_NETFLOW, jool) load"
+    ok "Pi Ethernet drivers (macb, genet) and the rebuilt out-of-tree modules (ipt_NETFLOW, jool, nf_nat_rtsp, accel-ppp's ipoe/vlan_mon) load"
     vsh 'systemctl is-active getty@tty1' || fail "no login prompt on tty1 (HDMI)"
     ok "login prompt on tty1 (what HDMI shows)"
     if [[ $profile == pi5 ]]; then
@@ -163,12 +170,8 @@ case "$test" in
     # LAN client: DHCP, DNS, NAT
     "$root/vm/client.sh" "$profile"
     client_login || fail "LAN client never reached a shell"
-    lease=
-    for _ in $(seq 30); do
-      lease=$(client_sh 20 "ip -4 -o addr show eth0 | awk '{print \$4}'" | grep -oE '^192\.168\.1\.[0-9]+' || true)
-      [[ -n "$lease" ]] && break
-      client_sh 60 'sudo ifdown eth0 >/dev/null 2>&1; sudo ifup eth0 >/dev/null 2>&1' >/dev/null || true
-    done
+    client_sh 90 'ip link set eth0 up; udhcpc -i eth0 -n -q -t 10' | tail -5
+    lease=$(client_sh 20 "ip -4 -o addr show eth0 | awk '{print \$4}'" | grep -oE '^192\.168\.1\.[0-9]+' || true)
     [[ -n "$lease" ]] || fail "LAN client got no 192.168.1.x lease"
     op 'show dhcp server leases' | tee "$dir/leases.txt"
     grep -qi "$CLIENT_MAC" "$dir/leases.txt" || fail "lease for $CLIENT_MAC not in show dhcp server leases"

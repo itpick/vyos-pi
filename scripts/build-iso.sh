@@ -120,6 +120,7 @@ for p in pathlib.Path(sys.argv[1], 'data').rglob('*.png'):
 EOF
 fi
 cd "$vb"
+git -C "$vb" checkout -q -- scripts/image-build/raw_image.py
 python3 "$repo/scripts/patch-vyos-build.py" "$vb"
 # Undo the raw image step's loop devices and mounts (it can leave some behind).
 raw_cleanup() {

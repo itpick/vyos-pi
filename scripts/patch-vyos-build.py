@@ -8,8 +8,14 @@ kpartx, as device-mapper devices. grub-install, run on those, cannot tell they
 are partitions of one GPT disk, so the GRUB it writes to the ESP has no
 part_gpt module and stops at "grub rescue>" (no such device: <root uuid>).
 This switches it to a partition-scanning loop device (losetup -P:
-/dev/loopNp1..3), which grub-install sees as the disk it is. Idempotent; fails
-if the code it patches has changed.
+/dev/loopNp1..), which grub-install sees as the disk it is.
+
+It also drops the BIOS boot partition VyOS's partitioner puts first (arm64
+has no BIOS) before anything is formatted, so the EFI system partition is
+partition 1, where the Raspberry Pi's bootloader looks, and the root is 2.
+This has to happen here: GRUB records its partition number ("(,gpt2)/boot/grub").
+
+Idempotent; fails if the code it patches has changed.
 """
 import pathlib
 import sys
@@ -23,11 +29,12 @@ edits = [
     ("command = f'losetup --show -f {raw_file}'",
      "command = f'losetup --show -f -P {raw_file}'  # vyos-pi: partscan"),
     ('cmd(f"kpartx -av {con.loop_device}")',
-     'cmd(f"partx -u {con.loop_device}")'),
+     'cmd(f"sgdisk -d 1 -s {con.loop_device}")\n'
+     '        cmd(f"partx -u {con.loop_device}")'),
     ('mapped_parts = sorted(glob(f"/dev/mapper/{mapper_base}p*"))',
      'for _ in range(50):\n'
      '            mapped_parts = sorted(glob(f"/dev/{mapper_base}p[0-9]*"))\n'
-     '            if len(mapped_parts) >= 3:\n'
+     '            if len(mapped_parts) == 2:\n'
      '                break\n'
      '            time.sleep(0.2)'),
 ]

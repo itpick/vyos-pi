@@ -134,7 +134,7 @@ if a.ssh_key:
             sys.exit(f'{a.ssh_key}: not an OpenSSH public key line')
         ktype, key = parts[0], parts[1]
         comment = re.sub(r'[^A-Za-z0-9._@-]', '-', parts[2] if len(parts) > 2 else f'key{i}')
-        k = at(user, 'public-keys', comment)
+        k = at(user, f'public-keys {comment}')
         leaf(k, ['key'], key)
         leaf(k, ['type'], ktype)
 if ssh_on:

@@ -7,9 +7,8 @@
 # the way "install image" does it, GRUB on the EFI system partition) and makes
 # out/vyos-pi-<board>.img:
 #
-#   - the FAT32 EFI system partition becomes partition 1 (vyos-build puts a
-#     BIOS boot partition first, which arm64 does not use), where the Pi's
-#     EEPROM bootloader looks for its files
+#   - partition 1 is the FAT32 EFI system partition, where the Pi's EEPROM
+#     bootloader looks for its files (scripts/patch-vyos-build.py)
 #   - pi4: the pftf/RPi4 UEFI firmware goes into the ESP (config.txt ->
 #     armstub=RPI_EFI.fd), preset to use all the RAM (uefi/pi4-vars.json).
 #     UEFI then starts GRUB (EFI/BOOT/BOOTAA64.EFI) and GRUB starts VyOS.
@@ -21,7 +20,7 @@
 #     first-boot settings go
 #
 # Then scripts/compress.sh writes out/vyos-pi-<board>.img.xz and its .sha256.
-# Needs: curl sha256sum sgdisk sfdisk mtools unzip python3 (+ virt-fw-vars for pi4)
+# Needs: curl sha256sum sfdisk mtools unzip python3 (+ virt-fw-vars for pi4)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
@@ -29,7 +28,7 @@ source versions.env
 
 board=${1:-}
 case "$board" in pi4|pi5) ;; *) echo "usage: $0 pi4|pi5" >&2; exit 2 ;; esac
-for tool in curl sha256sum sgdisk sfdisk mcopy unzip python3; do
+for tool in curl sha256sum sfdisk mcopy unzip python3; do
   command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 1; }
 done
 raw=out/vyos-pi-arm64.raw
@@ -57,14 +56,10 @@ img=$work/vyos-pi-$board.img
 echo ">> copying $raw"
 cp --sparse=always "$raw" "$img"
 
-# Partition table: drop the BIOS boot partition and renumber, so the ESP is 1
-# and the root is 2. Neither GRUB (it finds /boot by filesystem UUID) nor
-# VyOS (by mount point and label) cares about the numbers.
+# Partition 1 must be the ESP (the Pi bootloader reads it), 2 the root.
+# scripts/patch-vyos-build.py makes the raw image that way: GRUB records the
+# partition number, so it cannot be changed here.
 parts() { sfdisk -J "$img" | python3 -c 'import json,sys; [print(p["node"][-1], p["type"].upper(), p["start"], p["size"]) for p in json.load(sys.stdin)["partitiontable"]["partitions"]]'; }
-n=$(parts | awk '$2 == "21686148-6449-6E6F-744E-656564454649" { print $1 }')
-if [[ -n "$n" ]]; then
-  sgdisk -d "$n" -s "$img" >/dev/null 2>&1
-fi
 parts | sed 's/^/   partition /'
 read -r esp_n esp_type esp_start _ < <(parts | head -1)
 [[ "$esp_n" == 1 && "$esp_type" == C12A7328-F81F-11D2-BA4B-00A0C93EC93B ]] || { echo "partition 1 is not the ESP" >&2; exit 1; }

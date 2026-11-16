@@ -11,12 +11,18 @@ systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
 # Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
 # images be redistributed when the VyOS branding is replaced; scripts/build-iso.sh
 # swaps the logo artwork, this replaces the product name where a user sees it
-# first: the version line, the login banner and the pre-login issue.
+# first: the version line, the boot greeting, the login banner and the
+# pre-login issue.
 echo "I: vyos-pi: replacing user-visible branding"
 sed -i 's/^Version:          VyOS {{version}}/Version:          vyos-pi {{version}}/' /usr/libexec/vyos/op_mode/version.py
 grep -q '^Version:          vyos-pi ' /usr/libexec/vyos/op_mode/version.py
 sed -i "s/'issue': 'Welcome to VyOS - /'issue': 'vyos-pi - /" /usr/libexec/vyos/conf_mode/system_login_banner.py
 grep -q "'issue': 'vyos-pi - " /usr/libexec/vyos/conf_mode/system_login_banner.py
+# systemd's boot greeting ("Welcome to ...!") is os-release's PRETTY_NAME
+if [ -f /etc/os-release ]; then
+	ver=$(. /etc/os-release; echo "${VERSION:-}")
+	sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"vyos-pi ${ver}\"/" /etc/os-release
+fi
 test -f /usr/share/vyos/templates/login/default_motd.j2
 cat > /usr/share/vyos/templates/login/default_motd.j2 <<'MOTD'
 Welcome to vyos-pi {{ version_data.version }} ({{ version_data.release_train }})
@@ -34,6 +40,8 @@ You can change this banner using "set system login banner post-login" command.
 This system is free software made of many components; their licences are in
 /usr/share/doc/*/copyright.
 MOTD
+
+sed -i 's/This VyOS system is not/This vyos-pi system is not/' /usr/share/vyos/templates/login/motd_vyos_nonproduction.j2 2>/dev/null || true
 
 echo "I: vyos-pi: recording package versions in /usr/share/vyos-pi/manifest.txt"
 mkdir -p /usr/share/vyos-pi

@@ -3,6 +3,8 @@
 usage: console.py SOCK TIMEOUT EXPECT_REGEX [SEND]
 Sends SEND followed by CR (if given), then reads until EXPECT_REGEX matches or
 TIMEOUT seconds pass. Prints what was read (ANSI escapes stripped).
+The regex is matched against the text with ANSI escapes stripped (shells
+like busybox ash send a cursor position query after the prompt).
 Exit 0 on match, 1 on timeout.
 """
 import re
@@ -20,8 +22,10 @@ if send is not None:
     s.sendall(send.encode() + b"\r")
 buf = b""
 rx = re.compile(pattern.encode())
+ansi = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
+text = lambda: ansi.sub(b"", buf)
 deadline = time.time() + timeout
-while time.time() < deadline and not rx.search(buf):
+while time.time() < deadline and not rx.search(text()):
     try:
         chunk = s.recv(65536)
     except socket.timeout:
@@ -29,5 +33,5 @@ while time.time() < deadline and not rx.search(buf):
     if not chunk:
         break
     buf += chunk
-sys.stdout.write(re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", buf).decode(errors="replace"))
-sys.exit(0 if rx.search(buf) else 1)
+sys.stdout.write(text().decode(errors="replace"))
+sys.exit(0 if rx.search(text()) else 1)
