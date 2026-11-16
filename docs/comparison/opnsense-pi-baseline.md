@@ -1,5 +1,7 @@
 # opnsense-pi baseline: throughput, latency, load and Suricata IDS/IPS
 
+> The same tests with VyOS as the live router, side by side with these: [vyos-pi-live.md](vyos-pi-live.md).
+
 Measured on 2026-11-16, 14:09 to 14:51 UTC (08:09 to 08:51 CST), on the live home router. The
 goal is a baseline that the same scripts (`scripts/bench/`) can reproduce later against VyOS on
 an identical Pi 5 (pi5-1).
@@ -248,8 +250,10 @@ cp bench.env.example bench.env        # set ROUTER_KIND/ROUTER_IP/ROUTER_SSH/ROU
 | `run-state.sh` | runs all of the above, collects alerts (OPNsense API, or `eve.json` over SSH when `ROUTER_KIND=vyos`) and redacts the public IP |
 | `opnsense-ids.sh` | OPNsense-only Suricata control: snapshot, restore, diff, IPS on WAN, rulesets, drop policy, watchdog. VyOS will need its own equivalent |
 
-For VyOS: set `ROUTER_KIND=vyos`, `ROUTER_SSH=vyos@<pi5-1>`, `ROUTER_WAN_IF=eth0`. The Linux code
-paths of `router-poll.sh` and the `eve.json` alert reader have not been run against VyOS yet.
+For VyOS: set `ROUTER_KIND=vyos`, `ROUTER_SSH=vyos@<pi5-1>`, `ROUTER_WAN_IF=eth0`, and use
+`vyos-ids.sh` in place of `opnsense-ids.sh`. These scripts were run against VyOS as the live
+router on the same day: [vyos-pi-live.md](vyos-pi-live.md) has the results side by side with this
+baseline.
 Raw data lives in `data/opnsense-pi/<state>/`: `poll.raw`, `wan.jsonl`, `lan.jsonl`,
 `detect.jsonl`, `alerts.jsonl`, `ping-*.txt` and `router-*.txt`. The aggregate is in
 `summary.json` and `summary-tables.md`.

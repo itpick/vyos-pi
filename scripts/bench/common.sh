@@ -4,6 +4,10 @@ BENCH_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -f "$BENCH_DIR/bench.env" ] && . "$BENCH_DIR/bench.env" || . "$BENCH_DIR/bench.env.example"
 : "${ROUTER_IP:?}" "${ROUTER_SSH:?}" "${ROUTER_WAN_IF:?}" "${WIRED_IF:?}"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5)
+PEER_SSH_OPTS=("${SSH_OPTS[@]}")   # for LAN_PEER: without the router-only options below
+# extra ssh options for the router, e.g. ROUTER_SSH_OPTS="-o UserKnownHostsFile=$HOME/.ssh/known_hosts.vyos-pi"
+# shellcheck disable=SC2206
+[ -n "${ROUTER_SSH_OPTS:-}" ] && SSH_OPTS+=($ROUTER_SSH_OPTS)
 log() { echo "$(date '+%F %T') $*" >&2; }
 now() { python3 -c 'import time;print(f"{time.time():.3f}")'; }
 # Redact the current public IPv4/IPv6 from a file in place (called on every raw file).

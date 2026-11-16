@@ -28,7 +28,7 @@ http nmap_nse_ua http://testmynids.org/ -A 'Mozilla/5.0 (compatible; Nmap Script
 http curl_python_ua http://testmynids.org/ -A 'python-requests/2.0'
 for q in duckdns.org test.duckdns.org example.ddns.net facebookcorewwwi.onion onion.to example.onion.ws pool.minexmr.com api.ipify.org; do
   t0=$(now)
-  a=$(dig -b "$(ipconfig getifaddr "$WIRED_IF")" @"${DNS_TARGET:-8.8.8.8}" +time=3 +tries=1 +short "$q" A 2>&1 | head -2 | tr '\n' ' ')
+  a=$(dig -b "${SRC_IP:-$(ipconfig getifaddr "$WIRED_IF")}" @"${DNS_TARGET:-8.8.8.8}" +time=3 +tries=1 +short "$q" A 2>&1 | head -2 | tr '\n' ' ')
   rec probe "dns:$q" t0 "$t0" answer "$a"
 done
 t0=$(now)

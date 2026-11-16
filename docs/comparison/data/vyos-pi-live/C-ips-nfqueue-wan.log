@@ -1,0 +1,42 @@
+drop rules: 7133
+Mon 2026-11-16 22:09:53 UTC 5min left -    -      bench-ips-restore.timer bench-ips-restore.service
+IPS on at 22:03:53Z
+Suricata mode: ips (fail open)
+active
+table inet vyos_pi_ips {
+	chain forward {
+		type filter hook forward priority filter - 10; policy accept;
+		iifname "eth0" queue flags bypass to 0
+		oifname "eth0" queue flags bypass to 0
+	}
+}
+engine rules_loaded 53439 rules_failed 0 last_reload 2026-11-16T22:04:05.834808+0000 (after 21s)
+internet check 000
+  -> 231.9 Mbit/s (nic 243.2 ) WAN ping p50 6.623 p95 16.785 ms
+  -> 363.4 Mbit/s (nic 381.9 ) WAN ping p50 8.615 p95 49.185 ms
+  -> 225.0 Mbit/s (nic 236.4 ) WAN ping p50 6.92 p95 19.472 ms
+  -> 373.8 Mbit/s (nic 396.9 ) WAN ping p50 35.357 p95 119.399 ms
+2026-11-16 16:06:55 alerts:      709
+  248 2016149 ET INFO Session Traversal Utilities for NAT (STUN Binding Request) allowed
+  225 2016150 ET INFO Session Traversal Utilities for NAT (STUN Binding Response) allowed
+  201 2033078 ET INFO Session Traversal Utilities for NAT (STUN Binding Request On Non-Standard High Port) allowed
+  11 2100230 GPL CHAT Jabber/Google Talk Outgoing Traffic allowed
+  9 2260003 SURICATA Applayer Protocol detection skipped allowed
+  2 2024364 ET SCAN Possible Nmap User-Agent Observed blocked
+  1 2260001 SURICATA Applayer Wrong direction first Data allowed
+  1 2071656 ET INFO Tailscale DERP Relay Server in TLS SNI allowed
+  1 2100498 GPL ATTACK_RESPONSE id check returned root blocked
+  1 2042936 ET DYN_DNS DYNAMIC_DNS Query to a *.duckdns .org Domain blocked
+  1 2022918 ET DYN_DNS DYNAMIC_DNS Query to *.duckdns. Domain blocked
+  1 2071648 ET INFO Tailscale Control Pane in TLS SNI allowed
+  1 2028675 ET DYN_DNS DNS Query to DynDNS Domain *.ddns .net blocked
+  1 2014939 ET INFO DNS Query for TOR Hidden Domain .onion Accessible Via TOR allowed
+  1 2027757 ET DNS Query for .to TLD blocked
+  1 2026810 ET INFO DNS Query to .onion proxy domain (onion .ws) allowed
+  1 2024789 ET INFO DNS request for Monero mining pool allowed
+  1 2047702 ET INFO External IP Lookup Domain (ipify .org) in DNS Lookup allowed
+  1 2260000 SURICATA Applayer Mismatch protocol both directions allowed
+restoring at +187s
+active
+inactive
+IPS off at 22:07:10Z, total 197s

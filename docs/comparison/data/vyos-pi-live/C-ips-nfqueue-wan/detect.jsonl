@@ -1,0 +1,15 @@
+{"probe": "testmynids_uid", "t0": "1794866762.260", "curl_rc": "0", "result": "200 0.205358 1005", "body": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initia"}
+{"probe": "uid_root_httpbin", "t0": "1794866762.567", "curl_rc": "28", "result": "000 10.004273 0", "body": ""}
+{"probe": "eicar_http", "t0": "1794866772.661", "curl_rc": "0", "result": "200 0.081982 68", "body": "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"}
+{"probe": "nikto_ua", "t0": "1794866772.829", "curl_rc": "0", "result": "200 0.091845 1005", "body": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initia"}
+{"probe": "nmap_nse_ua", "t0": "1794866773.008", "curl_rc": "28", "result": "000 10.007030 0", "body": ""}
+{"probe": "curl_python_ua", "t0": "1794866783.121", "curl_rc": "0", "result": "200 0.092761 1005", "body": "<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initia"}
+{"probe": "dns:duckdns.org", "t0": "1794866783.299", "answer": "3.96.91.14 "}
+{"probe": "dns:test.duckdns.org", "t0": "1794866783.422", "answer": ";; connection timed out; no servers could be reached "}
+{"probe": "dns:example.ddns.net", "t0": "1794866786.491", "answer": ";; connection timed out; no servers could be reached "}
+{"probe": "dns:facebookcorewwwi.onion", "t0": "1794866789.558", "answer": ""}
+{"probe": "dns:onion.to", "t0": "1794866789.623", "answer": ";; connection timed out; no servers could be reached "}
+{"probe": "dns:example.onion.ws", "t0": "1794866792.703", "answer": ""}
+{"probe": "dns:pool.minexmr.com", "t0": "1794866792.866", "answer": ""}
+{"probe": "dns:api.ipify.org", "t0": "1794866792.927", "answer": "172.67.74.152 104.26.12.205 "}
+{"probe": "nmap_scanme", "t0": "1794866793.030", "result": "22/tcp   open  ssh        OpenSSH 6.6.1p1 Ubuntu 2ubuntu2.13 (Ubuntu Linux; protocol 2.0);80/tcp   open  http       Apache httpd 2.4.7 ((Ubuntu));9929/tcp open  nping-echo Nping echo;Nmap done: 1 IP address (1 host up) scanned in 13.43 seconds;"}

@@ -1,0 +1,3 @@
+rules-file-lines-active 0
+rules-file-lines-commented 0
+engine rules_loaded 0 rules_failed 0 last_reload 2026-11-16T21:19:59.566604+0000

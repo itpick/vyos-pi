@@ -32,3 +32,15 @@
 | pi5-vyos-eth0-just-booted | TCP router → Mac x4 | 587 | 5042 |  | n/a |  |  | n/a |
 | pi5-vyos-eth0-just-booted | UDP Mac → router x1 @1G | 826 |  | 0.2 / 0.01 | n/a |  |  | n/a |
 | pi5-vyos-eth0-just-booted | UDP router → Mac x1 @1G | 954 |  | 0.15 / 0.018 | n/a |  |  | n/a |
+| vyos-live-lan-eth2 | TCP Mac → router x1 | 911 | 0 |  | 34.7 (65/24/24/25) | 69 | 1011 / 14 | 60.05 |
+| vyos-live-lan-eth2 | TCP router → Mac x1 | 911 | 45 |  | 33.9 (56/24/29/26) | 79 | 7 / 1050 | 61.15 |
+| vyos-live-lan-eth2 | TCP Mac → router x4 | 862 | 663 |  | 35.3 (64/25/25/28) | 68 | 960 / 18 | 60.6 |
+| vyos-live-lan-eth2 | TCP router → Mac x4 | 927 | 500 |  | 27.0 (51/19/23/15) | 67 | 10 / 1040 | 60.6 |
+| vyos-live-lan-eth2 | UDP Mac → router x1 @1G | 952 |  | 0.72 / 0.024 | 27.7 (48/20/19/24) | 54 | 1037 / 4 | 61.15 |
+| vyos-live-lan-eth2 | UDP router → Mac x1 @1G | 922 |  | 0.32 / 0.022 | 36.8 (41/43/29/35) | 63 | 3 / 1030 | 61.15 |
+| vyos-live-lan-eth2-repeat | TCP Mac → router x1 | 916 | 0 |  | 37.9 (62/29/30/29) | 66 | 1028 / 14 | 61.15 |
+| vyos-live-lan-eth2-repeat | TCP router → Mac x1 | 923 | 62 |  | 25.0 (48/17/19/16) | 52 | 7 / 1034 | 59.5 |
+| vyos-live-lan-eth2-repeat | TCP Mac → router x4 | 871 | 449 |  | 34.4 (60/26/22/30) | 71 | 977 / 20 | 60.6 |
+| vyos-live-lan-eth2-repeat | TCP router → Mac x4 | 928 | 675 |  | 30.4 (57/20/24/21) | 73 | 10 / 1046 | 61.7 |
+| vyos-live-lan-eth2-repeat | UDP Mac → router x1 @1G | 952 |  | 0.8 / 0.29 | 27.9 (45/22/20/24) | 48 | 1031 / 4 | 61.15 |
+| vyos-live-lan-eth2-repeat | UDP router → Mac x1 @1G | 944 |  | 0.02 / 0.019 | 30.6 (32/28/31/32) | 50 | 2 / 1028 | 62.25 |

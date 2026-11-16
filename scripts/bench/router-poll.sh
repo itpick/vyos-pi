@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 # Poll router CPU (per core), load, memory, temperature, WAN NIC counters and
-# Suricata CPU/RSS every POLL_INT seconds over one ssh session (read-only).
+# Suricata CPU/RSS (and ntopng's on Linux) every POLL_INT seconds over one ssh session (read-only).
 # Works on FreeBSD (OPNsense) and Linux (VyOS). Runs until killed.
-# Usage: router-poll.sh OUT.raw
+# Usage: router-poll.sh OUT.raw   (appends, so parts run separately share one file)
 set -euo pipefail
 . "$(dirname "$0")/common.sh"
 OUT=${1:?out file}
-exec ssh "${SSH_OPTS[@]}" "$ROUTER_SSH" "env WANIF=$ROUTER_WAN_IF INT=$POLL_INT sh -s" > "$OUT" <<'REMOTE'
+exec ssh "${SSH_OPTS[@]}" "$ROUTER_SSH" "env WANIF=$ROUTER_WAN_IF INT=$POLL_INT sh -s" >> "$OUT" <<'REMOTE'
 os=$(uname -s)
+HZ=$(getconf CLK_TCK 2>/dev/null || echo 100)
+pst() { # PID -> "cpu_ticks rss_kb" (0 0 if not running)
+  [ -n "$1" ] && [ -r "/proc/$1/stat" ] || { echo "0 0"; return; }
+  t=$(sed 's/.*) //' "/proc/$1/stat" | awk '{print $12+$13}')
+  r=$(awk '/^VmRSS/{print $2}' "/proc/$1/status")
+  echo "$t ${r:-0}"
+}
+pct() { # ticks prev_ticks rss -> "pct rss"
+  d=$(( $1 - $2 )); [ "$d" -lt 0 ] && d=0
+  awk -v d="$d" -v hz="$HZ" -v i="$INT" -v r="$3" 'BEGIN{printf "%.1f %d\n", 100*d/(hz*i), r}'
+}
 while :; do
   ts=$(date +%s)
   if [ "$os" = FreeBSD ]; then
@@ -26,8 +37,16 @@ while :; do
     s=/sys/class/net/$WANIF/statistics
     nic="$(cat $s/rx_packets) $(cat $s/rx_errors) $(cat $s/rx_dropped) $(cat $s/rx_bytes) $(cat $s/tx_packets) $(cat $s/tx_errors) $(cat $s/tx_bytes)"
   fi
-  sur=$(ps -axo pcpu,rss,comm 2>/dev/null | awk '$3 ~ /^(suricata|Suricata-Main|W#)/{c+=$1;r+=$2}END{print c+0, r+0}')
-  echo "$ts|$cp|$la|$t|$fq|$mem|$nic|$sur" || exit 0
+  if [ "$os" = FreeBSD ]; then
+    sur=$(ps -axo pcpu,rss,comm 2>/dev/null | awk '$3 ~ /^(suricata|Suricata-Main|W#)/{c+=$1;r+=$2}END{print c+0, r+0}')
+    ntop="0 0"
+  else
+    # Linux ps %CPU is a lifetime average, so take utime+stime deltas from /proc
+    # instead: % of one core over the poll interval, plus RSS in KB.
+    set -- $(pst "$(pgrep -f '^/usr/bin/suricata' | head -1)"); sur=$(pct "$1" "${s_prev:-$1}" "$2"); s_prev=$1
+    set -- $(pst "$(pgrep -x ntopng | head -1)"); ntop=$(pct "$1" "${n_prev:-$1}" "$2"); n_prev=$1
+  fi
+  echo "$ts|$cp|$la|$t|$fq|$mem|$nic|$sur|$ntop" || exit 0
   sleep "$INT"
 done
 REMOTE
