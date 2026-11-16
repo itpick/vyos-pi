@@ -1,0 +1,179 @@
+#!/bin/sh
+# vyos-pi-bootlog STAGE [NOTE]: save a boot log to FAT partitions, so a board
+# that never gets on the network still leaves a trace that any computer can
+# read (pull the card or disk, or boot the other OS).
+#
+# Where: the kernel command line's vyos-pi.bootlog=SPEC[,SPEC...], each SPEC
+# PARTUUID=<id>:<dir> (or UUID=, LABEL=, or a /dev path, then :<dir>). The Pi 5
+# image's cmdline.txt names its own FAT partition (vyos-pi/boot-log);
+# scripts/pi-trial-install.sh adds the SD card's (vyos-pi-trial/boot-log), so a
+# failed trial boot is readable from the OS it falls back to. Without the
+# parameter this does nothing.
+#
+# What: <dir>/<boot>-<stage>.txt, <boot> counting up per partition (<dir>/last
+# holds the latest; the 10 latest boots are kept): the command line, the Pi
+# firmware's boot flags, block devices, loaded modules, live-boot's log and the
+# kernel log; once systemd runs, also the failed units, interfaces and the
+# journal.
+#
+# When: in the initramfs (built in by /etc/initramfs-tools/hooks/vyos-pi-bootlog)
+# as soon as it starts (initramfs-top, before udev), before the root is
+# searched (initramfs), when live-boot gives up
+# (initramfs-panic, just before panic= reboots), and when it hands over
+# (initramfs-done); then from vyos-pi-boot (early) and vyos-pi-bootlog.service
+# (running, after VyOS loaded its config; shutdown).
+#
+# Each write mounts the partition, writes one file, syncs and unmounts it, so
+# the partition is never left mounted across a reset. POSIX sh: it runs under
+# the initramfs's busybox as well as on the running system.
+stage=${1:-manual}
+note=${2:-}
+KEEP=10
+
+spec=
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in vyos-pi.bootlog=*) spec=${arg#vyos-pi.bootlog=} ;; esac
+done
+[ -n "$spec" ] || exit 0
+
+initramfs=
+[ -f /conf/initramfs.conf ] && initramfs=1
+state=/run/vyos-pi/bootlog
+mkdir -p "$state" 2>/dev/null
+
+# 32-bit big-endian integers from the Pi firmware (/chosen/bootloader)
+dt_u32() {
+	[ -r "$1" ] || { echo '-'; return; }
+	printf '%d' "0x$(od -v -An -t x1 "$1" | tr -d ' \n')" 2>/dev/null || echo '?'
+}
+
+collect() {
+	echo "### vyos-pi boot log: stage $stage${note:+ ($note)}"
+	echo "date: $(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) (the clock may be unset this early)"
+	echo "uptime: $(cut -d' ' -f1 /proc/uptime 2>/dev/null)s"
+	echo "kernel: $(uname -r 2>/dev/null)"
+	if [ -n "$initramfs" ]; then echo "where: initramfs"; else echo "where: running system"; fi
+	echo
+	echo "### /proc/cmdline"
+	cat /proc/cmdline
+	echo
+	echo "### Pi firmware (/proc/device-tree/chosen/bootloader)"
+	b=/proc/device-tree/chosen/bootloader
+	if [ -d "$b" ]; then
+		for f in boot-mode partition tryboot; do
+			echo "$f: $(dt_u32 "$b/$f")"
+		done
+	else
+		echo "(none: not booted by the Pi firmware)"
+	fi
+	[ -r /proc/device-tree/model ] && echo "model: $(tr -d '\0' </proc/device-tree/model)"
+	echo
+	echo "### /proc/partitions"
+	cat /proc/partitions
+	echo
+	echo "### /dev/disk/by-partuuid"
+	ls -l /dev/disk/by-partuuid 2>&1
+	echo
+	echo "### /proc/modules"
+	cut -d' ' -f1 /proc/modules 2>/dev/null | sort | tr '\n' ' '
+	echo
+	if [ -f /boot.log ]; then
+		echo
+		echo "### live-boot /boot.log"
+		cat /boot.log
+	fi
+	if [ -z "$initramfs" ]; then
+		echo
+		echo "### systemctl --failed"
+		systemctl --no-pager --failed 2>&1
+		echo
+		echo "### ip addr"
+		ip -br addr 2>&1
+		ip -br link 2>&1
+		echo
+		echo "### journal (this boot, last 3000 lines)"
+		journalctl -b --no-pager -o short-monotonic 2>&1 | tail -n 3000
+	fi
+	echo
+	echo "### dmesg"
+	dmesg 2>&1
+}
+
+resolve() {
+	case "$1" in
+		PARTUUID=*) d=/dev/disk/by-partuuid/$(echo "${1#PARTUUID=}" | tr 'A-Z' 'a-z') ;;
+		UUID=*) d=/dev/disk/by-uuid/${1#UUID=} ;;
+		LABEL=*) d=/dev/disk/by-label/${1#LABEL=} ;;
+		/dev/*) d=$1 ;;
+		*) return 1 ;;
+	esac
+	# udev makes the links (not there yet in init-top: ask blkid, which reads
+	# the partition tables itself); give a disk still being probed a moment
+	i=0
+	while [ "$i" -lt 5 ]; do
+		[ -b "$d" ] && { echo "$d"; return 0; }
+		case "$1" in
+			PARTUUID=*|UUID=*|LABEL=*)
+				b=$(blkid -l -t "$1" -o device 2>/dev/null)
+				[ -n "$b" ] && [ -b "$b" ] && { echo "$b"; return 0; }
+				;;
+		esac
+		sleep 1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+if [ -n "$initramfs" ]; then
+	for m in vfat nls_cp437 nls_ascii nls_utf8 nls_iso8859-1; do
+		modprobe -q "$m" 2>/dev/null
+	done
+fi
+
+tmp=$state/$stage.$$
+collect >"$tmp" 2>&1
+
+rc=0
+IFS_SAVE=$IFS
+IFS=,
+for one in $spec; do
+	IFS=$IFS_SAVE
+	id=${one%%:*}
+	dir=${one#*:}
+	[ "$dir" = "$one" ] && dir=/vyos-pi/boot-log
+	key=$(echo "$id" | tr -c 'A-Za-z0-9\n' '_')
+	dev=$(resolve "$id") || { echo "vyos-pi-bootlog: $id not found" >&2; rc=1; continue; }
+	mnt=$state/mnt.$$
+	mkdir -p "$mnt"
+	if ! mount -t vfat -o rw,noatime "$dev" "$mnt" 2>/dev/null; then
+		echo "vyos-pi-bootlog: cannot mount $dev" >&2
+		rmdir "$mnt"
+		rc=1
+		continue
+	fi
+	mkdir -p "$mnt$dir"
+	# One number per boot and partition: the first stage of a boot takes the next.
+	if [ -f "$state/n.$key" ]; then
+		n=$(cat "$state/n.$key")
+	else
+		n=$(cat "$mnt$dir/last" 2>/dev/null | tr -cd '0-9')
+		n=$(( ${n:-0} + 1 ))
+		echo "$n" >"$mnt$dir/last"
+		echo "$n" >"$state/n.$key"
+		# keep the latest $KEEP boots
+		for f in "$mnt$dir"/*-*.txt; do
+			[ -f "$f" ] || continue
+			b=$(basename "$f" | cut -d- -f1 | sed 's/^0*//')
+			[ "${b:-0}" -le $((n - KEEP)) ] && rm -f "$f"
+		done
+	fi
+	cp "$tmp" "$mnt$dir/$(printf '%04d' "$n")-$stage.txt" || rc=1
+	sync
+	umount "$mnt" || umount -l "$mnt"
+	rmdir "$mnt" 2>/dev/null
+	echo "vyos-pi-bootlog: $stage -> $id:$dir ($(printf '%04d' "$n")-$stage.txt)"
+	IFS=,
+done
+IFS=$IFS_SAVE
+rm -f "$tmp"
+exit $rc

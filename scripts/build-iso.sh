@@ -99,6 +99,7 @@ cp "$kcache"/*.deb "$vb/packages/"
 step "ISO $version (flavor raspberrypi)"
 cp "$repo/vyos/raspberrypi.toml" "$vb/data/build-flavors/"
 cp -a "$repo/overlay/." "$vb/data/live-build-config/includes.chroot/"
+install -m 755 "$repo/scripts/pi-trial-install.sh" "$vb/data/live-build-config/includes.chroot/usr/libexec/vyos-pi/pi-trial-install"
 install -m 755 "$repo"/vyos/hooks/*.chroot "$vb/data/live-build-config/hooks/live/"
 mkdir -p "$vb/data/live-build-config/includes.chroot/usr/share/vyos-pi"
 {
@@ -170,6 +171,19 @@ trap 'umount "$x/sq" 2>/dev/null; rm -rf "$x"' EXIT
 xorriso -osirrox on -indev "$out/vyos-pi-arm64.iso" -extract /live "$x/live" >/dev/null 2>&1
 cp -L "$x/live/vmlinuz" "$out/boot/vmlinuz"
 cp -L "$x/live/initrd.img" "$out/boot/initrd.img"
+# the boot log (overlay/etc/initramfs-tools) must be in the initramfs
+initrd_list() {
+	case "$(head -c4 "$1" | od -An -tx1 | tr -d ' ')" in
+		28b52ffd) zstd -dc "$1" ;;
+		1f8b*) gzip -dc "$1" ;;
+		fd377a58) xz -dc "$1" ;;
+		*) cat "$1" ;;
+	esac | cpio -it 2>/dev/null
+}
+initrd_files=$(initrd_list "$out/boot/initrd.img")
+for f in bin/vyos-pi-bootlog lib/live/boot/9999-vyos-pi-bootlog.sh scripts/init-top/00-vyos-pi-bootlog scripts/init-premount/vyos-pi-bootlog scripts/init-bottom/vyos-pi-bootlog; do
+	grep -qE "(^|/)$f\$" <<<"$initrd_files" || die "initrd lacks $f (vyos-pi boot log)"
+done
 mkdir "$x/sq"
 mount -t squashfs -o loop,ro "$x/live/filesystem.squashfs" "$x/sq"
 cp "$x"/sq/usr/lib/linux-image-*/broadcom/bcm271*.dtb "$out/boot/dtbs/"

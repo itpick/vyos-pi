@@ -119,4 +119,7 @@ else
 fi
 
 [ -n "$trial" ] && /usr/libexec/vyos-pi/vyos-pi-diag boot
+# Boot log to the FAT partition(s) on the command line (vyos-pi.bootlog=):
+# systemd got this far, VyOS has not loaded its config yet.
+/usr/libexec/vyos-pi/vyos-pi-bootlog early >/dev/null 2>&1
 exit 0

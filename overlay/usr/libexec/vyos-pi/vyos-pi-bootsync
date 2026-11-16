@@ -6,9 +6,12 @@ config.txt on the FAT partition and loads, from that partition,
 
   vyos-pi/boot/Image        the kernel (unwrapped from VyOS's EFI zboot vmlinuz)
   vyos-pi/boot/initrd.img   the initrd
-  bcm2712-rpi-5-b.dtb       the mainline device tree (C1 boards),
-  bcm2712d0-rpi-5-b.dtb     and for D0 boards (2 GB and 16 GB, most late-2024+)
-  cmdline.txt               the kernel command line GRUB would have used
+  bcm2712-rpi-5-b.dtb       the mainline device tree (C1); the firmware loads
+                            it on every Pi 5, and on D0 boards applies
+                            overlays/bcm2712d0.dtbo (from the image build) to it
+  bcm2712d0-rpi-5-b.dtb     mainline's D0 tree, in case a firmware loads it
+  cmdline.txt               the kernel command line GRUB would have used, plus
+                            the Pi 5's consoles, panic=10 and the boot log
 
 VyOS only knows GRUB: "add system image" and "set system image default-boot"
 change GRUB's default. This copies the default image's files to the FAT
@@ -20,7 +23,11 @@ which only the Pi 5 image has.
   vyos-pi-bootsync [--check]
       on a running VyOS, as root (--check: report only, exit 1 if out of date)
   vyos-pi-bootsync --stage DIR --version V --vmlinuz F --initrd F --dtbs DIR
+                   [--esp-partuuid ID]
       at image build time: write the same files into DIR (the ESP's contents)
+  vyos-pi-bootsync --patch-dtb IN OUT
+      add what the firmware's early watchdog needs to a device tree (used by
+      scripts/pi-trial-install.sh for images that predate it)
 """
 import argparse
 import glob
@@ -34,10 +41,19 @@ import sys
 import tempfile
 import time
 
-BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'
-# Pi 5 debug UART (3-pin header) is ttyAMA10 with the mainline device tree; HDMI
-# is tty1. The last console= is /dev/console (boot messages, emergency shell).
-CONSOLES = 'console=ttyAMA10,115200 console=tty1'
+# VyOS's, as vyos/hooks/90-vyos-pi.chroot patches it (panic=10)
+BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 panic=10 vyos-union=/boot/'
+# Pi 5 debug UART (3-pin header) is ttyAMA10 with the mainline device tree
+# (PL011 at 0x107d001000, also the device tree's stdout-path); HDMI is tty1.
+# Kernel messages go to every console=; the last one is /dev/console, which
+# also gets the initramfs's and systemd's messages: the UART, because it works
+# from the first instruction (earlycon) whatever the firmware does with HDMI.
+EARLYCON = 'earlycon=pl011,0x107d001000,115200n8'
+CONSOLES = 'console=tty1 console=ttyAMA10,115200'
+# Reboot 10 s after a kernel panic, or when the initramfs cannot find VyOS
+# (initramfs-tools and live-boot honour panic= instead of starting a shell).
+PANIC = 'panic=10'
+BOOTLOG_DIR = '/vyos-pi/boot-log'
 # mainline file name -> name(s) the Pi 5 firmware looks for
 DTBS = {
     'bcm2712-rpi-5-b.dtb': ['bcm2712-rpi-5-b.dtb'],
@@ -53,6 +69,101 @@ def log(msg):
             f.write(time.strftime('%Y-%m-%dT%H:%M:%S ') + f'bootsync: {msg}\n')
     except OSError:
         pass
+
+
+FDT_BEGIN_NODE, FDT_END_NODE, FDT_PROP, FDT_NOP, FDT_END = 1, 2, 3, 4, 9
+
+
+def dtb_early_watchdog(dtb: bytes) -> bytes:
+    """Let the Pi 5 firmware start the hardware watchdog for this device tree.
+
+    The firmware arms it before starting the kernel (config.txt
+    kernel_watchdog_timeout) only when the device tree's "watchdog" alias
+    points at an enabled node with an "early-watchdog" property: what
+    "dtparam=watchdog=on" adds on Raspberry Pi's own device trees
+    (bcm2712-rpi.dtsi: watchdog = <&watchdog>, "early-watchdog?";, firmware
+    2025-07-17 "arm_loader: Also require the early-watchdog property"). The
+    mainline tree has neither, nor the __overrides__ that dtparam needs, so add
+    both to the PM node (brcm,bcm2712-pm: bcm2835-wdt). Idempotent."""
+    magic, total, off_struct, off_strings, off_rsv, version, last_comp, cpu, size_strings, size_struct = \
+        struct.unpack_from('>10I', dtb, 0)
+    if magic != 0xd00dfeed:
+        raise SystemExit('not a device tree blob')
+    st = bytearray(dtb[off_struct:off_struct + size_struct])
+    strings = bytearray(dtb[off_strings:off_strings + size_strings])
+
+    def name_at(off):
+        return bytes(strings[off:strings.index(b'\0', off)])
+
+    def align(n):
+        return (n + 3) & ~3
+
+    # Walk the tree: each node's full path, where its properties start (a new
+    # property can go right there) and its properties.
+    nodes, stack, i = [], [], 0
+    while i < len(st):
+        tok = struct.unpack_from('>I', st, i)[0]
+        i += 4
+        if tok == FDT_BEGIN_NODE:
+            end = st.index(b'\0', i)
+            name = st[i:end].decode()
+            i = align(end + 1)
+            path = '/' if not stack else nodes[stack[-1]]['path'].rstrip('/') + '/' + name
+            nodes.append({'path': path, 'at': i, 'props': {}})
+            stack.append(len(nodes) - 1)
+        elif tok == FDT_END_NODE:
+            stack.pop()
+        elif tok == FDT_PROP:
+            ln, nameoff = struct.unpack_from('>II', st, i)
+            nodes[stack[-1]]['props'][name_at(nameoff)] = bytes(st[i + 8:i + 8 + ln])
+            i = align(i + 8 + ln)
+        elif tok == FDT_NOP:
+            continue
+        elif tok == FDT_END:
+            break
+        else:
+            raise SystemExit(f'bad device tree token {tok}')
+
+    pm = [n for n in nodes if b'brcm,bcm2712-pm' in n['props'].get(b'compatible', b'').split(b'\0')]
+    aliases = [n for n in nodes if n['path'] == '/aliases']
+    if not pm or not aliases:
+        raise SystemExit('device tree has no brcm,bcm2712-pm node or no /aliases')
+    pm, aliases = pm[0], aliases[0]
+    if pm['props'].get(b'status', b'okay\0') not in (b'okay\0', b'ok\0'):
+        raise SystemExit(f"{pm['path']} is disabled")
+    target = pm['path'].encode() + b'\0'
+    want = []  # (insert offset, name, value)
+    if b'early-watchdog' not in pm['props']:
+        want.append((pm['at'], b'early-watchdog', b''))
+    if aliases['props'].get(b'watchdog') != target:
+        if b'watchdog' in aliases['props']:
+            raise SystemExit('device tree already has a different watchdog alias')
+        want.append((aliases['at'], b'watchdog', target))
+    if not want:
+        return dtb
+    for at, name, val in sorted(want, key=lambda w: -w[0]):
+        idx = strings.find(name + b'\0')
+        while idx > 0 and strings[idx - 1] != 0:  # must start a string
+            idx = strings.find(name + b'\0', idx + 1)
+        if idx < 0:
+            idx = len(strings)
+            strings += name + b'\0'
+        prop = struct.pack('>III', FDT_PROP, len(val), idx) + val + b'\0' * (align(len(val)) - len(val))
+        st[at:at] = prop
+    rsv, j = b'', off_rsv
+    while True:  # memory reservation entries, up to the (0, 0) terminator
+        entry = dtb[j:j + 16]
+        rsv += entry
+        j += 16
+        if entry == b'\0' * 16:
+            break
+    o_rsv = 40
+    o_struct = o_rsv + len(rsv)
+    o_strings = o_struct + len(st)
+    total = o_strings + len(strings)
+    hdr = struct.pack('>10I', 0xd00dfeed, total, o_struct, o_strings, o_rsv, version, last_comp, cpu,
+                      len(strings), len(st))
+    return hdr + rsv + bytes(st) + bytes(strings)
 
 
 def kernel_image(data: bytes) -> bytes:
@@ -79,26 +190,34 @@ def kernel_image(data: bytes) -> bytes:
     return data
 
 
-def cmdline(version: str, boot_opts: str = '') -> str:
-    """What GRUB passes (BOOT_IMAGE is how VyOS tells which image is running)."""
-    opts = boot_opts or BOOT_OPTS_STEM + version
-    return f'BOOT_IMAGE=/boot/{version}/vmlinuz {opts} {CONSOLES}\n'
+def cmdline(version: str, boot_opts: str = '', esp_partuuid: str = '') -> str:
+    """What GRUB passes (BOOT_IMAGE is how VyOS tells which image is running),
+    plus the Pi 5's consoles, panic= and the boot log (vyos-pi-bootlog) on the
+    FAT partition itself."""
+    opts = (boot_opts or BOOT_OPTS_STEM + version).split()
+    if not any(o.startswith('panic=') for o in opts):
+        opts.append(PANIC)
+    opts += [EARLYCON] + CONSOLES.split()
+    if esp_partuuid:
+        opts.append(f'vyos-pi.bootlog=PARTUUID={esp_partuuid.lower()}:{BOOTLOG_DIR}')
+    return f'BOOT_IMAGE=/boot/{version}/vmlinuz {" ".join(opts)}\n'
 
 
-def stage_files(version, vmlinuz, initrd, dtb_dir, boot_opts=''):
+def stage_files(version, vmlinuz, initrd, dtb_dir, boot_opts='', esp_partuuid=''):
     """{relative path on the ESP: content}"""
     files = {
         'vyos-pi/boot/Image': kernel_image(open(vmlinuz, 'rb').read()),
         'vyos-pi/boot/initrd.img': open(initrd, 'rb').read(),
         'vyos-pi/boot/version': f'{version}\n'.encode(),
-        'cmdline.txt': cmdline(version, boot_opts).encode(),
+        'cmdline.txt': cmdline(version, boot_opts, esp_partuuid).encode(),
     }
     for src, names in DTBS.items():
         path = os.path.join(dtb_dir, src)
         if not os.path.exists(path):
             raise SystemExit(f'missing device tree {path}')
+        dtb = dtb_early_watchdog(open(path, 'rb').read())
         for name in names:
-            files[name] = open(path, 'rb').read()
+            files[name] = dtb
     return files
 
 
@@ -153,6 +272,8 @@ def running():
     if not esp:
         log('no EFI system partition found')
         return 1
+    esp_partuuid = subprocess.run(['blkid', '-s', 'PARTUUID', '-o', 'value', esp],
+                                  stdout=subprocess.PIPE, text=True).stdout.strip()
     with tempfile.TemporaryDirectory(prefix='vyos-pi-bootsync.') as tmp:
         mnt = os.path.join(tmp, 'esp')
         os.mkdir(mnt)
@@ -175,7 +296,7 @@ def running():
                 if not dtb_dirs:
                     log(f'no device trees in {sq}')
                     return 1
-                files = stage_files(version, vmlinuz, initrd, dtb_dirs[-1], boot_opts)
+                files = stage_files(version, vmlinuz, initrd, dtb_dirs[-1], boot_opts, esp_partuuid)
             finally:
                 subprocess.run(['umount', sqmnt])
             changed = write_files(mnt, files, check=args.check)
@@ -199,10 +320,18 @@ ap.add_argument('--version')
 ap.add_argument('--vmlinuz')
 ap.add_argument('--initrd')
 ap.add_argument('--dtbs')
+ap.add_argument('--esp-partuuid', default='')
+ap.add_argument('--patch-dtb', nargs=2, metavar=('IN', 'OUT'))
 args = ap.parse_args()
 
+if args.patch_dtb:
+    data = dtb_early_watchdog(open(args.patch_dtb[0], 'rb').read())
+    with open(args.patch_dtb[1], 'wb') as f:
+        f.write(data)
+    sys.exit(0)
+
 if args.stage:
-    files = stage_files(args.version, args.vmlinuz, args.initrd, args.dtbs)
+    files = stage_files(args.version, args.vmlinuz, args.initrd, args.dtbs, esp_partuuid=args.esp_partuuid)
     for rel in write_files(args.stage, files):
         print(f'   {rel}')
     sys.exit(0)

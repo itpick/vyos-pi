@@ -1,0 +1,57 @@
+// vyos-pi: turn the mainline Raspberry Pi 5 device tree (bcm2712-rpi-5-b.dtb,
+// C1 stepping) into the D0 one (mainline's bcm2712-d-rpi-5-b.dts), as
+// overlays/bcm2712d0.dtbo.
+//
+// The Pi 5 firmware loads bcm2712-rpi-5-b.dtb on every Pi 5 and, on D0 boards
+// (all 2 GB and 16 GB ones, and most made since late 2024), applies an
+// overlay named "bcm2712d0" from the overlays folder (firmware log:
+// "dtb_file 'bcm2712-rpi-5-b.dtb'", "Loaded overlay 'bcm2712d0'"). It does
+// not load bcm2712d0-rpi-5-b.dtb. Raspberry Pi's own overlay of that name is
+// written for their downstream tree; this one does the same for mainline's.
+// Without it a D0 board runs the C1 pin controller layout, and the first pull
+// setting written past the end of the smaller D0 block kills the kernel with
+// an SError (brcmstb_pull_config_set, ~1 s into the boot).
+//
+// The changes are exactly what mainline's bcm2712-d-rpi-5-b.dts changes.
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2712";
+
+	fragment@0 {
+		target = <&uart10>;
+		__overlay__ {
+			interrupts = <0x00 0x78 0x04>;
+		};
+	};
+
+	fragment@1 {
+		target = <&pinctrl>;
+		__overlay__ {
+			compatible = "brcm,bcm2712d0-pinctrl";
+			reg = <0x7d504100 0x20>;
+		};
+	};
+
+	fragment@2 {
+		target = <&pinctrl_aon>;
+		__overlay__ {
+			compatible = "brcm,bcm2712d0-aon-pinctrl";
+			reg = <0x7d510700 0x1c>;
+		};
+	};
+
+	fragment@3 {
+		target = <&gio_aon>;
+		__overlay__ {
+			brcm,gpio-bank-widths = <0x0f 0x06>;
+			gpio-line-names = "RP1_SDA", "RP1_SCL", "RP1_RUN", "SD_IOVDD_SEL",
+				"SD_PWR_ON", "SD_CDET_N", "SD_FLG_N", "", "2712_WAKE",
+				"2712_STAT_LED", "", "", "PMIC_INT", "UART_TX_FS",
+				"UART_RX_FS", "", "", "", "", "", "", "", "", "", "", "",
+				"", "", "", "", "", "", "HDMI0_SCL", "HDMI0_SDA",
+				"HDMI1_SCL", "HDMI1_SDA", "PMIC_SCL", "PMIC_SDA";
+		};
+	};
+};

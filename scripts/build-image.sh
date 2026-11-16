@@ -16,11 +16,14 @@
 #     mainline device tree (no UEFI; see README "Pi 5 boot path"), staged by
 #     overlay/.../vyos-pi-bootsync, the same code that keeps them current on
 #     the running system. GRUB stays on the ESP for VMs and UEFI boards.
+#     overlays/bcm2712d0.dtbo (firmware/pi5/bcm2712d0-overlay.dts): the
+#     firmware applies it on D0 boards to the C1 tree it always loads.
 #   - both: vyos-pi/ with README.txt and config.boot.default, where
 #     first-boot settings go
 #
 # Then scripts/compress.sh writes out/vyos-pi-<board>.img.xz and its .sha256.
-# Needs: curl sha256sum sfdisk mtools unzip python3 (+ virt-fw-vars for pi4)
+# Needs: curl sha256sum sfdisk mtools unzip python3 (+ virt-fw-vars for pi4,
+# dtc for pi5)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
@@ -93,8 +96,16 @@ for v in want:
   pi5)
     echo ">> staging Pi 5 direct-boot files for $version"
     cp firmware/pi5/config.txt "$stage/config.txt"
+    command -v dtc >/dev/null || { echo "needs dtc (device-tree-compiler)" >&2; exit 1; }
+    mkdir -p "$stage/overlays"
+    dtc -q -@ -I dts -O dtb -o "$stage/overlays/bcm2712d0.dtbo" firmware/pi5/bcm2712d0-overlay.dts
+    printf '%s\n' "vyos-pi: device tree overlays for the Pi 5 firmware (bcm2712d0.dtbo:" \
+      "mainline's D0 changes, applied by the firmware on D0 boards). See" \
+      "firmware/pi5/bcm2712d0-overlay.dts at https://github.com/itpick/vyos-pi" >"$stage/overlays/README"
+    # the ESP's GPT partition UUID: cmdline.txt sends the boot log there
+    esp_uuid=$(sfdisk -J "$img" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["uuid"].lower())')
     python3 -I overlay/usr/libexec/vyos-pi/vyos-pi-bootsync --stage "$stage" --version "$version" \
-      --vmlinuz out/boot/vmlinuz --initrd out/boot/initrd.img --dtbs out/boot/dtbs
+      --vmlinuz out/boot/vmlinuz --initrd out/boot/initrd.img --dtbs out/boot/dtbs --esp-partuuid "$esp_uuid"
     ;;
 esac
 cp firmware/README.txt "$stage/vyos-pi/README.txt"

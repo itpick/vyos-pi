@@ -10,8 +10,10 @@ The sibling project for OPNsense is [opnsense-pi](https://github.com/itpick/opns
 > Unofficial. VyOS publishes no arm64 builds for the Pi; these are built here
 > from VyOS's public sources (vyos-build, rolling branch) with a Raspberry Pi
 > kernel configuration. Not affiliated with or supported by VyOS Networks.
-> **Tested in QEMU only: nothing here has booted on a real Pi yet.** Use it for
-> labs and learning. Keep a working router nearby.
+> **The Pi 5 image has booted on one real board (a 16 GB Pi 5, from NVMe, in
+> a [trial boot](#try-it-on-a-pi-that-already-runs-another-os)); the Pi 4 image
+> has only run in QEMU.** Use it for labs and learning. Keep a working router
+> nearby.
 
 ## Board status
 
@@ -19,17 +21,160 @@ The sibling project for OPNsense is [opnsense-pi](https://github.com/itpick/opns
 |---|---|---|
 | Boot chain | EEPROM → [pftf/RPi4](https://github.com/pftf/RPi4) UEFI v1.54-rc (RAM limit preset off) → GRUB → VyOS | EEPROM → VyOS kernel + initrd straight from the FAT partition, mainline device tree; no UEFI ([why](#pi-5-boot-path)) |
 | Kernel | VyOS's 6.18.62 arm64 kernel plus [`kernel/raspberrypi.config`](kernel/raspberrypi.config) | same kernel |
-| Onboard Ethernet | `bcmgenet` (matched over ACPI); built, not yet seen on a board | RP1 GEM: `macb` + mainline RP1 driver (`MISC_RP1`); built, not yet seen on a board |
-| SD card | `sdhci-iproc` (ACPI), built in | `sdhci-brcmstb`, built in |
+| Onboard Ethernet | `bcmgenet` (matched over ACPI); built, not yet seen on a board | RP1 GEM: `macb` + mainline RP1 driver (`MISC_RP1`): link at 1000 Mb/s, DHCP, SSH on a real board |
+| SD card | `sdhci-iproc` (ACPI), built in | `sdhci-brcmstb`, built in; works (SDR104) |
+| NVMe | n/a | `pcie-brcmstb` + `nvme`, built in: VyOS's root on NVMe works |
 | USB NICs | RTL8153/RTL8156 (`r8152`), AX88179 (`ax88179_178a`): VyOS's own kernel modules | same |
 | AES in hardware | No (BCM2711 has no ARMv8 crypto), so VPNs are CPU-bound | Yes (Cortex-A76) |
 | Fan | n/a | Not driven: mainline 6.18 has no driver for the RP1 PWM the fan hangs off |
-| Verdict | Boots and routes in QEMU; untested on hardware | Boots and routes in QEMU, both through GRUB and the direct path; untested on hardware |
+| HDMI | UEFI's framebuffer | Firmware screens only: the firmware hands the mainline tree no framebuffer and the kernel has no BCM2712 display driver, so the kernel console and login are on the [debug UART](#when-a-pi-5-does-not-come-up) |
+| Clock | no RTC | No RTC driver (mainline 6.18): the clock is wrong until NTP sets it |
+| Verdict | Boots and routes in QEMU; untested on hardware | Boots on a real 16 GB (D0) Pi 5 from NVMe: RP1 Ethernet, USB NICs (`r8152`), SD card, NVMe root grown to the disk; routing not yet tried there. Boots and routes in QEMU, both through GRUB and the direct path |
 
 VyOS here is the rolling train: a snapshot of VyOS development on the day of
 the build, not an LTS release.
 
+## Try it on a Pi that already runs another OS
+
+**The recommended way to try vyos-pi on a Pi 5 that runs Raspberry Pi OS or
+Ubuntu.** [`scripts/pi-trial-install.sh`](scripts/pi-trial-install.sh), run on
+that OS, writes vyos-pi to a second disk (NVMe or USB) and boots it *once*,
+leaving the OS you have as the default. Whatever goes wrong - VyOS does not
+start, panics, hangs, never gets on the network - the Pi comes back to the old
+OS by itself, and the boot logs are on its boot partition. Nobody has to go to
+the board.
+
+```sh
+# on the Pi 5, as root; /dev/nvme0n1 is erased
+curl -fLO https://raw.githubusercontent.com/itpick/vyos-pi/main/scripts/pi-trial-install.sh
+chmod +x pi-trial-install.sh
+./pi-trial-install.sh --config config.boot \
+  https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz /dev/nvme0n1
+./pi-trial-install.sh --reboot          # VyOS, once
+# ... back on the old OS, after VyOS rebooted (or failed):
+./pi-trial-install.sh --status          # what happened; boot logs
+# ... or, logged in to VyOS and happy with it:
+sudo /usr/libexec/vyos-pi/pi-trial-install --commit   # VyOS becomes the default
+```
+
+`--config` takes a seed `config.boot` ([`seed-config.py`](scripts/seed-config.py);
+`--mgmt eth0` gives a DHCP client with SSH allowed in) so you can log in over
+the network. Without it VyOS starts unconfigured, reachable only on the
+console.
+
+How it works. The Pi firmware has a one-time "tryboot" flag: `reboot '0 tryboot'`
+makes it read `tryboot.txt` instead of `config.txt`, for that one boot. The
+flag is cleared before the OS starts, so the next reset of any kind - a reboot,
+a panic, the watchdog, a power cycle - reads `config.txt` again
+([Raspberry Pi docs: fail-safe OS updates](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#fail-safe-os-updates-tryboot)).
+The script puts on the old OS's boot partition (`/boot/firmware`):
+
+- `tryboot.txt`: a whole config of its own, `os_prefix=vyos-pi-trial/` with
+  `kernel=Image`, `initramfs initrd.img followkernel`, `cmdline=cmdline.txt`,
+  so every file the firmware loads comes from that folder
+  ([`os_prefix`](https://www.raspberrypi.com/documentation/computers/config_txt.html#os_prefix)),
+  plus `kernel_watchdog_timeout`.
+- `vyos-pi-trial/`: VyOS's kernel, initrd and device trees (copied from the
+  target disk), `overlays/bcm2712d0.dtbo` (see [D0 boards](#pi-5-boot-path)),
+  and a `cmdline.txt` that points VyOS at its root on the target disk
+  (`live-media=/dev/disk/by-partuuid/...`; `persistence-storage=filesystem`, so
+  live-boot does not mount the old OS's partitions looking for persistence).
+
+This is the plain `tryboot.txt` mechanism, not the `[tryboot]` filter in
+`autoboot.txt` with `tryboot_a_b=1`
+([autoboot.txt](https://www.raspberrypi.com/documentation/computers/config_txt.html#autoboot-txt)):
+that one switches between boot *partitions* of one disk, while here the trial
+kernel has to be on the SD card's partition (the firmware boots from the first
+device in `BOOT_ORDER` that has a bootable partition) and its root on another
+disk. The script refuses to arm a trial when `autoboot.txt` exists, or when
+`BOOT_ORDER` would try the target disk before the SD card (then a plain reboot
+would start VyOS with no way back).
+
+What brings the old OS back, by stage:
+
+| VyOS gets stuck in... | What resets the board | After |
+|---|---|---|
+| the firmware, the kernel's first second | the hardware watchdog (`kernel_watchdog_timeout`; the firmware starts it, the kernel feeds it) | ~15 s |
+| a kernel panic | `panic=10` | 10 s |
+| the initramfs, root not found | live-boot gives up after 60 s, then `panic=10` (no shell) | ~70 s |
+| a hang before systemd takes the watchdog | `watchdog.open_timeout` (= `kernel_watchdog_timeout`, default 300 s) | 5 min |
+| VyOS up but unreachable | the trial timer (`vyos-pi/reboot-after-minutes` on the target, `--trial-minutes`, default 30) | 30 min |
+
+Images up to 2026.11.16-1 do not open the watchdog from systemd, so on those the
+watchdog also resets a healthy trial after `--watchdog-seconds` (raise it to
+cover your test; their initrd also lacks the boot log:
+`scripts/bootlog-initrd.py` adds it, `--initrd`).
+
+`--commit` (on VyOS, as root; or this script from the SD card's
+`vyos-pi-trial/`) makes VyOS the default without touching the EEPROM: it
+renames the SD card's `config.txt` to `config.txt.vyos-pi-committed`. A Pi 5
+partition without `config.txt` is not bootable
+([autoboot.txt](https://www.raspberrypi.com/documentation/computers/config_txt.html#autoboot-txt)),
+so the bootloader moves on to the next device in `BOOT_ORDER` (`0xf461`: SD,
+then NVMe, then USB) and starts VyOS. It also removes the trial timer.
+`--uncommit`, or renaming the file back on any computer, returns to the old
+OS. Alternatively, take the SD card out, or make the target first in
+`BOOT_ORDER` (`sudo rpi-eeprom-config --edit` on the old OS) once VyOS has
+proven itself.
+
+## When a Pi 5 does not come up
+
+**Get back to the old OS.** A board that boots VyOS from NVMe or USB by default
+and does not come up (the state a plain `dd` plus a `BOOT_ORDER` change can
+leave it in):
+
+1. Power off. Unplug the NVMe (or USB disk), or, from another computer, rename
+   `config.txt` on its FAT partition (the target's partition 1) to
+   `config.txt.off`. Without a bootable partition there, the bootloader goes on
+   down `BOOT_ORDER` to the SD card.
+2. Power on: the old OS starts from the SD card.
+3. Put the boot order back to SD first: `sudo rpi-eeprom-config --edit`, set
+   `BOOT_ORDER=0xf461`, reboot. Plug the disk back in (rename `config.txt.off`
+   back if you renamed it), and use the [trial boot](#try-it-on-a-pi-that-already-runs-another-os)
+   from now on.
+
+**See what happened.**
+
+- Boot logs: `vyos-pi-trial/boot-log/` on the SD card after a trial,
+  `vyos-pi/boot-log/` on the image's own FAT partition after a normal boot
+  ([`vyos-pi-bootlog`](overlay/usr/libexec/vyos-pi/vyos-pi-bootlog), driven by
+  `vyos-pi.bootlog=` in `cmdline.txt`). One file per stage, `<boot>-<stage>.txt`:
+  `initramfs-top` (first thing in the initramfs), `initramfs` (before the root
+  is searched), `initramfs-panic` (the root was not found; written before
+  `panic=10` reboots), `initramfs-done`, `early` (systemd up), `running` (VyOS
+  loaded its config), `shutdown`. Each has the command line, the firmware's
+  boot flags (`tryboot`, `partition`), block devices, modules, live-boot's log
+  and the kernel log; the userspace ones also the journal. No file at all means
+  the kernel died before the initramfs.
+- The kernel log of a boot that died before the initramfs:
+  [`scripts/pi-find-kernel-log.py`](scripts/pi-find-kernel-log.py) finds it in
+  the RAM the failed boot left behind (the trial's command line has
+  `log_buf_len=8M`, which puts it at the top of RAM; boot the old OS with
+  `mem=8G` so it leaves that alone). This is how the D0 SError below was found.
+- The serial console: the 3-pin debug UART between the HDMI ports (3.3 V,
+  115200 8N1, the Raspberry Pi Debug Probe fits). The firmware logs there
+  (`uart_2ndstage=1`), then the kernel from its first instruction
+  (`earlycon=pl011,0x107d001000,115200n8`), then the initramfs and systemd
+  (`console=ttyAMA10,115200` comes last, so it is `/dev/console`). HDMI shows
+  only the firmware's screens: the firmware gives the mainline device tree no
+  framebuffer, so there is no kernel console or login there.
+
+**Why stalls reboot now.** `cmdline.txt` has `panic=10` (the kernel reboots
+10 s after a panic; initramfs-tools and live-boot reboot instead of starting a
+shell when the root is missing), and VyOS's GRUB boot options get it too.
+`config.txt` has `kernel_watchdog_timeout=300`: the firmware starts the
+BCM2712's hardware watchdog before the kernel and passes
+`watchdog.open_timeout=300`; the kernel's `bcm2835-wdt` (built in) feeds it
+until systemd opens it (`RuntimeWatchdogSec=15`,
+[`20-vyos-pi-watchdog.conf`](overlay/etc/systemd/system.conf.d/20-vyos-pi-watchdog.conf)).
+The firmware only starts it for a device tree whose `watchdog` alias points at
+a node with `early-watchdog` (Raspberry Pi's trees get that from
+`dtparam=watchdog=on`); vyos-pi-bootsync adds both to the mainline trees.
+
 ## Flash it
+
+For a new SD card or disk, a Pi with nothing else to keep (on a Pi that
+already runs another OS, use the [trial boot](#try-it-on-a-pi-that-already-runs-another-os)):
 
 ```sh
 # Pi 5. Replace /dev/sdX with your SD card or USB SSD. This erases it.
@@ -63,10 +208,21 @@ Linux:
   written against the downstream tree).
 - So the Pi 5 image skips UEFI: `config.txt` has the EEPROM bootloader load
   `vyos-pi/boot/Image` (the VyOS kernel, unwrapped from its EFI zboot file),
-  `vyos-pi/boot/initrd.img` and the mainline device trees from the kernel
-  package (`bcm2712-rpi-5-b.dtb`, and `bcm2712-d-rpi-5-b.dtb` as
-  `bcm2712d0-rpi-5-b.dtb` for D0 boards), with `cmdline.txt` holding what
-  GRUB would pass.
+  `vyos-pi/boot/initrd.img` and the mainline device tree from the kernel
+  package (`bcm2712-rpi-5-b.dtb`), with `cmdline.txt` holding what GRUB would
+  pass.
+- **D0 boards** (all 2 GB and 16 GB Pi 5s, most since late 2024). The
+  firmware loads `bcm2712-rpi-5-b.dtb` on every Pi 5 and, on D0 boards,
+  applies an overlay called `bcm2712d0` to it (its log: `dtb_file
+  'bcm2712-rpi-5-b.dtb'`, `Loaded overlay 'bcm2712d0'`); it never loads
+  `bcm2712d0-rpi-5-b.dtb`. Raspberry Pi's overlay of that name is for their
+  own tree. Without a matching one, a D0 board runs mainline's C1 tree, whose
+  pin controller is larger than the D0's, and the kernel dies about a second
+  in with `Asynchronous SError Interrupt` in `brcmstb_pull_config_set`: what
+  stopped the first real-board boots of 2026.11.16-1. The image now has
+  `overlays/bcm2712d0.dtbo`
+  ([`firmware/pi5/bcm2712d0-overlay.dts`](firmware/pi5/bcm2712d0-overlay.dts)):
+  exactly the changes of mainline's `bcm2712-d-rpi-5-b.dts`.
 
 VyOS's image management only knows GRUB, so
 [`vyos-pi-bootsync`](overlay/usr/libexec/vyos-pi/vyos-pi-bootsync) copies GRUB's
@@ -185,11 +341,13 @@ the VM says nothing about it (see below).
 
 ### First boot
 
-1. Update the Pi's EEPROM bootloader first (from Raspberry Pi OS: `sudo rpi-eeprom-update -a`).
+1. Update the Pi's EEPROM bootloader first (from Raspberry Pi OS: `sudo rpi-eeprom-update -a`;
+   the Pi 5 watchdog handover needs a bootloader from mid-2025 or later).
 2. Pi 4: the UEFI comes preset with *Limit RAM to 3 GB* off, so there is
    nothing to change at its splash screen.
-3. Log in on HDMI or the serial console (Pi 5: the 3-pin debug UART, `ttyAMA10`;
-   Pi 4: GPIO 14/15, `ttyAMA0`) as `vyos` / `vyos`, and change the password.
+3. Log in on the serial console (Pi 5: the 3-pin debug UART, `ttyAMA10`;
+   Pi 4: GPIO 14/15, `ttyAMA0`, or HDMI) as `vyos` / `vyos`, and change the
+   password. The Pi 5 has no console on HDMI.
    Or skip the console: seed a `config.boot` (above) and SSH in.
 4. Without a seed, VyOS starts unconfigured: see the
    [VyOS quick start](https://docs.vyos.io/en/latest/quick-start.html).
@@ -255,6 +413,11 @@ make test-direct             # boot the pi5 disk like a Pi 5 does: kernel, initr
                              # cmdline.txt from the FAT partition, no UEFI or GRUB
 make test-upgrade BOARD=pi5 ISO=other.iso  # add system image, reboot into it; pi5: the
                              # FAT partition follows and a direct boot starts it
+make test-trialboot          # pi-trial-install.sh against disk images: tryboot.txt,
+                             # vyos-pi-trial/; boot it like the firmware would, VyOS
+                             # comes up from the "NVMe", boot logs on the "SD card";
+                             # --commit / --uncommit from VyOS; then a missing root
+                             # reboots by itself (panic=10) with a boot log
 make test                    # image + trial for both boards, direct for pi5
 ```
 

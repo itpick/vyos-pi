@@ -1,0 +1,9 @@
+#!/bin/sh
+# vyos-pi: boot log to the FAT partition(s) named by vyos-pi.bootlog= as soon
+# as the initramfs runs, before udev: proof the kernel got this far, with its
+# log so far, even if what follows hangs.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+[ -x /bin/vyos-pi-bootlog ] && /bin/vyos-pi-bootlog initramfs-top </dev/null
+exit 0

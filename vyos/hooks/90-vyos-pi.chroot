@@ -4,9 +4,28 @@
 # data/live-build-config/hooks/live/.
 set -e
 
-echo "I: vyos-pi: enabling the boot hook and the Pi 5 boot file sync"
-chmod 755 /usr/libexec/vyos-pi/*
-systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
+echo "I: vyos-pi: enabling the boot hook, the Pi 5 boot file sync and the boot log"
+chmod 755 /usr/libexec/vyos-pi/* \
+	/etc/initramfs-tools/hooks/vyos-pi-bootlog /etc/initramfs-tools/scripts/init-top/00-vyos-pi-bootlog \
+	/etc/initramfs-tools/scripts/init-premount/vyos-pi-bootlog \
+	/etc/initramfs-tools/scripts/init-bottom/vyos-pi-bootlog
+systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service vyos-pi-bootlog.service
+
+# Boots that cannot find their root reboot instead of waiting at an
+# (initramfs) shell nobody can reach: panic=10 in the boot options VyOS writes
+# to GRUB for every image it installs (initramfs-tools and live-boot honour
+# it; so does the kernel). The Pi 5's cmdline.txt (vyos-pi-bootsync) has it too.
+echo "I: vyos-pi: panic=10 in VyOS's GRUB boot options"
+grub_py=/usr/lib/python3/dist-packages/vyos/system/grub.py
+grep -q "^BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'" "$grub_py"
+sed -i "s|^BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'|BOOT_OPTS_STEM: str = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 panic=10 vyos-union=/boot/'|" "$grub_py"
+grep -q "biosdevname=0 panic=10 vyos-union=" "$grub_py"
+
+# The boot log in the initramfs (etc/initramfs-tools/hooks/vyos-pi-bootlog).
+# live-build may build the initramfs again later; scripts/build-iso.sh checks
+# the ISO's initrd has it.
+echo "I: vyos-pi: rebuilding the initramfs with the boot log"
+update-initramfs -u -k all || echo "W: vyos-pi: update-initramfs failed here; relying on live-build's"
 
 # Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
 # images be redistributed when the VyOS branding is replaced; scripts/build-iso.sh

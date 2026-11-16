@@ -6,12 +6,24 @@
 arm_64bit=1
 kernel=vyos-pi/boot/Image
 initramfs vyos-pi/boot/initrd.img followkernel
-# Mainline device trees from the VyOS kernel package; the firmware picks
-# bcm2712-rpi-5-b.dtb (C1) or bcm2712d0-rpi-5-b.dtb (D0) by board revision.
+# Mainline device trees from the VyOS kernel package. The firmware loads
+# bcm2712-rpi-5-b.dtb (the C1 tree) on every Pi 5 and, on D0 boards (2 GB,
+# 16 GB, most since late 2024), applies overlays/bcm2712d0.dtbo to it, which
+# vyos-pi ships with mainline's D0 changes (firmware/pi5/bcm2712d0-overlay.dts).
 # os_check=0: the firmware's downstream-kernel compatibility check does not
 # apply to a mainline device tree.
 os_check=0
-# Debug UART (3-pin header between the HDMI ports): ttyAMA10, 115200.
+# Debug UART (3-pin header between the HDMI ports): ttyAMA10, 115200. The
+# firmware logs there too (uart_2ndstage), then the kernel from its first
+# instruction (earlycon in cmdline.txt).
 enable_uart=1
+uart_2ndstage=1
+# Hardware watchdog from the firmware on: the kernel (bcm2835-wdt) keeps it fed
+# until systemd takes it over (watchdog.open_timeout, which this sets, then
+# RuntimeWatchdogSec in the image). A boot that hangs anywhere after the
+# firmware - kernel, initramfs, or before systemd opens the watchdog within
+# 5 minutes - resets the board. Needs a 2025 or later bootloader EEPROM
+# (rpi-eeprom-update); older ones ignore it.
+kernel_watchdog_timeout=300
 
 [all]

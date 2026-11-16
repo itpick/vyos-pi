@@ -13,6 +13,13 @@ reboot-after-minutes  A number of minutes: reboot that long after every boot.
                       These boots save diagnostics here as diag-boot.txt,
                       diag-running.txt (3 minutes in) and diag-reboot.txt.
 
+boot-log/             Boot logs, one file per boot and stage (<boot>-<stage>.txt:
+                      initramfs-top, initramfs, initramfs-panic, initramfs-done,
+                      early, running, shutdown), the 10 latest boots. Read
+                      them here when the Pi does not come up on the network.
+                      (Raspberry Pi 5; cmdline.txt's vyos-pi.bootlog= names
+                      this folder.)
+
 Raspberry Pi 5 only: boot/ holds the kernel and initrd the Pi starts directly
 (config.txt and cmdline.txt are one folder up). vyos-pi-bootsync rewrites them
 from VyOS's default image at every boot and shutdown; don't edit them by hand
