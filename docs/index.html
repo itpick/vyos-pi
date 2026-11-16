@@ -56,6 +56,10 @@
   td.n .fine { white-space: normal; font-size: .78rem; }
   tr.grp td { background: var(--code); font-weight: 600; font-size: .8rem; padding: 5px 10px; }
   .startup td.n { white-space: normal; }
+  .related { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 16px 0 20px; font-size: .9rem; }
+  .related ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
+  .related li { margin: 2px 0; }
+  .related a { color: var(--accent); }
   footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
   footer a, p a, li a { color: var(--accent); }
 </style>
@@ -65,7 +69,15 @@
   <h1>VyOS for Raspberry Pi</h1>
   <p class="sub">Flash-and-boot VyOS rolling (arm64) images, built from VyOS's public sources with a Raspberry Pi kernel.</p>
   <p class="note">Unofficial community build, not affiliated with or supported by VyOS Networks. <strong>The Pi 5 image has booted on one real board (16 GB, from NVMe); the Pi 4 image has only run in QEMU.</strong> Fine for labs; keep a working router nearby.</p>
-  <p class="sub"><strong>OPNsense vs VyOS on the Pi 5:</strong> <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">side-by-side speed and boot-time results</a> &middot; <a href="#startup">startup table</a> &middot; <a href="https://itpick.github.io/opnsense-pi/">OPNsense for Raspberry Pi</a></p>
+  <aside class="related" aria-label="Related projects">
+    <strong>Related projects</strong>
+    <ul>
+      <li><a href="https://itpick.github.io/opnsense-pi/">opnsense-pi</a>: OPNsense images for Raspberry Pi 4/5</li>
+      <li><a href="https://itpick.github.io/sensr/">sensr</a>: Rust + NixOS firewall OS, an OPNsense remake (in development)</li>
+      <li><a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">OPNsense vs VyOS on the Pi 5</a>: side-by-side speed and boot-time results (<a href="#startup">startup table</a>)</li>
+    </ul>
+  </aside>
+  <p class="sub"><strong>Coming from the OPNsense GUI?</strong> The <a href="https://github.com/itpick/vyos-pi/blob/main/docs/cheatsheet.md">VyOS cheat sheet</a> gives the CLI for DHCP, DNS, firewall, NAT, WireGuard and monitoring.</p>
 
   <div class="boards">
     <div class="card">
@@ -157,7 +169,7 @@ sudo ./pi-trial-install.sh --reboot</pre>
     Built with <a href="https://github.com/vyos/vyos-build">vyos-build</a> and
     <a href="https://github.com/pftf/RPi4">pftf/RPi4</a>. VyOS is free software (GPL).
     VyOS&reg; is a registered trademark of Sentrium S.L. (VyOS Networks); this project is not affiliated with VyOS Networks or Raspberry Pi Ltd.
-    The sibling project for OPNsense: <a href="https://itpick.github.io/opnsense-pi/">opnsense-pi</a>.
+    Related: <a href="https://itpick.github.io/opnsense-pi/">opnsense-pi</a> (OPNsense images for Raspberry Pi 4/5) and <a href="https://itpick.github.io/sensr/">sensr</a> (Rust + NixOS firewall OS, in development).
   </footer>
 </main>
 <script>

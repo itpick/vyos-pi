@@ -5,7 +5,13 @@ plus QEMU tests that boot them on a Pi-shaped VM.
 
 **Download page:** https://itpick.github.io/vyos-pi/
 
-The sibling project for OPNsense is [opnsense-pi](https://github.com/itpick/opnsense-pi).
+**Coming from the OPNsense GUI?** [docs/cheatsheet.md](docs/cheatsheet.md) gives the VyOS CLI
+for each task: DHCP, DNS, firewall, NAT, WireGuard and monitoring.
+
+**Related projects:**
+- [opnsense-pi](https://github.com/itpick/opnsense-pi) ([download page](https://itpick.github.io/opnsense-pi/)): OPNsense images for Raspberry Pi 4/5
+- [sensr](https://github.com/itpick/sensr) ([page](https://itpick.github.io/sensr/)): Rust + NixOS firewall OS, an OPNsense remake (in development)
+- [OPNsense vs VyOS on the Pi 5](https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md): side-by-side speed and boot-time results
 
 > Unofficial. VyOS publishes no arm64 builds for the Pi; these are built here
 > from VyOS's public sources (vyos-build, rolling branch) with a Raspberry Pi
