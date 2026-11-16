@@ -61,9 +61,9 @@ cp --sparse=always "$raw" "$img"
 # and the root is 2. Neither GRUB (it finds /boot by filesystem UUID) nor
 # VyOS (by mount point and label) cares about the numbers.
 parts() { sfdisk -J "$img" | python3 -c 'import json,sys; [print(p["node"][-1], p["type"].upper(), p["start"], p["size"]) for p in json.load(sys.stdin)["partitiontable"]["partitions"]]'; }
-if parts | awk '$2 == "21686148-6449-6E6F-744E-656564454649"' | grep -q .; then
-  n=$(parts | awk '$2 == "21686148-6449-6E6F-744E-656564454649" { print $1 }')
-  sgdisk -q -d "$n" -s "$img" >/dev/null
+n=$(parts | awk '$2 == "21686148-6449-6E6F-744E-656564454649" { print $1 }')
+if [[ -n "$n" ]]; then
+  sgdisk -d "$n" -s "$img" >/dev/null 2>&1
 fi
 parts | sed 's/^/   partition /'
 read -r esp_n esp_type esp_start _ < <(parts | head -1)
@@ -107,7 +107,7 @@ cp out/vyos-pi.config.boot.default "$stage/vyos-pi/config.boot.default"
 mcopy -s -o -i "$esp" "$stage"/* ::/
 echo ">> ESP contents"
 mdir -/ -b -i "$esp" :: | sed 's/^/   /'
-echo "   free: $(mdir -i "$esp" :: | tail -1)"
+echo "   $(mdir -i "$esp" :: | grep -i "bytes free")"
 
 {
   cat out/vyos-pi-arm64.manifest.txt
