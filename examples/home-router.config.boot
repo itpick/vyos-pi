@@ -413,15 +413,17 @@ firewall {
             related {
                 action "accept"
             }
-            invalid {
-                action "drop"
-            }
         }
     }
     ipv4 {
         input {
             filter {
                 default-action "drop"
+                rule 1 {
+                    action "drop"
+                    description "invalid connection state"
+                    state "invalid"
+                }
                 rule 10 {
                     action "accept"
                     inbound-interface {
@@ -656,6 +658,11 @@ firewall {
         forward {
             filter {
                 default-action "drop"
+                rule 1 {
+                    action "drop"
+                    description "invalid connection state"
+                    state "invalid"
+                }
                 rule 10 {
                     action "drop"
                     inbound-interface {
@@ -857,6 +864,11 @@ firewall {
         input {
             filter {
                 default-action "drop"
+                rule 1 {
+                    action "drop"
+                    description "invalid connection state"
+                    state "invalid"
+                }
                 rule 10 {
                     action "accept"
                     inbound-interface {
@@ -974,6 +986,11 @@ firewall {
         forward {
             filter {
                 default-action "drop"
+                rule 1 {
+                    action "drop"
+                    description "invalid connection state"
+                    state "invalid"
+                }
                 rule 10 {
                     action "accept"
                     protocol "ipv6-icmp"
