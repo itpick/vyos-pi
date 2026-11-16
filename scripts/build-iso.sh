@@ -99,6 +99,7 @@ cp "$kcache"/*.deb "$vb/packages/"
 step "ISO $version (flavor raspberrypi)"
 cp "$repo/vyos/raspberrypi.toml" "$vb/data/build-flavors/"
 cp -a "$repo/overlay/." "$vb/data/live-build-config/includes.chroot/"
+install -m 755 "$repo/scripts/pi-trial-install.sh" "$vb/data/live-build-config/includes.chroot/usr/libexec/vyos-pi/pi-trial-install"
 install -m 755 "$repo"/vyos/hooks/*.chroot "$vb/data/live-build-config/hooks/live/"
 mkdir -p "$vb/data/live-build-config/includes.chroot/usr/share/vyos-pi"
 {
@@ -172,6 +173,13 @@ cp -L "$x/live/vmlinuz" "$out/boot/vmlinuz"
 cp -L "$x/live/initrd.img" "$out/boot/initrd.img"
 mkdir "$x/sq"
 mount -t squashfs -o loop,ro "$x/live/filesystem.squashfs" "$x/sq"
+# The boot log (overlay/etc/initramfs-tools) must be in the initramfs. The
+# image's own zstd decompresses it (the build container has none).
+initrd_files=$(chroot "$x/sq" zstd -dc <"$out/boot/initrd.img" | cpio -it 2>/dev/null) \
+	|| initrd_files=$(gzip -dc <"$out/boot/initrd.img" | cpio -it 2>/dev/null) || true
+for f in bin/vyos-pi-bootlog lib/live/boot/9999-vyos-pi-bootlog.sh scripts/init-top/00-vyos-pi-bootlog scripts/init-premount/vyos-pi-bootlog scripts/init-bottom/vyos-pi-bootlog; do
+	grep -qE "(^|/)$f\$" <<<"$initrd_files" || die "initrd lacks $f (vyos-pi boot log)"
+done
 cp "$x"/sq/usr/lib/linux-image-*/broadcom/bcm271*.dtb "$out/boot/dtbs/"
 cp "$x/sq/usr/share/vyos/version.json" "$out/boot/version.json"
 python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$out/boot/version.json" > "$out/boot/version"

@@ -29,6 +29,23 @@
 #                                 Pi 5 does (kernel, initrd and cmdline.txt from
 #                                 the FAT partition, no UEFI or GRUB) and check
 #                                 VyOS comes up with its config
+#   vm/test.sh trialboot [pi5]   scripts/pi-trial-install.sh against disk
+#                                 images: writes the image to a "target" disk
+#                                 and arms a trial on a fake SD card's FAT
+#                                 (MBR, like Ubuntu's or Pi OS's); checks
+#                                 tryboot.txt and vyos-pi-trial/; boots what
+#                                 the firmware would boot in tryboot mode
+#                                 (kernel, initrd, cmdline.txt from the SD's
+#                                 vyos-pi-trial/, both disks attached): VyOS
+#                                 comes up from the target, boot logs land on
+#                                 the SD; then --commit from VyOS renames the
+#                                 SD's config.txt and removes the trial timer,
+#                                 and --uncommit puts config.txt back
+#   vm/test.sh panic [pi5]       after trialboot: the trial's command line
+#                                 with a root that does not exist reboots by
+#                                 itself (panic=10) instead of waiting at an
+#                                 initramfs shell, and leaves a boot log
+#                                 (initramfs-panic) on the SD card
 #   vm/test.sh upgrade [pi5|pi4] ISO
 #                                 after "image": "add system image" another
 #                                 vyos-pi ISO (a different version), reboot into
@@ -222,6 +239,8 @@ case "$test" in
     vsh 'systemctl is-active getty@tty1' || fail "no login prompt on tty1 (HDMI)"
     ok "login prompt on tty1 (what HDMI shows)"
     if [[ $profile == pi5 ]]; then
+      # (after vyos-pi-bootsync.service's own run at boot)
+      for _ in $(seq 30); do [[ "$(vsh 'systemctl show -p SubState --value vyos-pi-bootsync')" == exited ]] && break; sleep 5; done
       vsh 'sudo /usr/libexec/vyos-pi/vyos-pi-bootsync --check' || fail "Pi 5 boot files on the FAT partition do not match the running image"
       ok "Pi 5 direct-boot files on the FAT partition match the running image"
     fi
@@ -374,6 +393,103 @@ case "$test" in
       ok "direct boot (as on a Pi 5) starts the upgraded image $new"
     fi
     ;;
-  *) echo "usage: $0 image|trial|ids|direct|upgrade [pi5|pi4] [ISO]" >&2; exit 2 ;;
+  trialboot)
+    [[ $profile == pi5 ]] || fail "the trial boot is the Pi 5 path"
+    sd_id=5d0c0a1e
+    sd_part=$sd_id-01
+    sdfat=$dir/sdfat
+    target=$dir/trial-target.img
+    rm -rf "$sdfat" "$target" "$dir/sd.img"
+    mkdir -p "$sdfat"
+    # the "old OS" boot partition: what the trial must leave alone
+    printf '[all]\nkernel=vmlinuz\n# the old OS\n' >"$sdfat/config.txt"
+    [[ -f "$img_src" ]] || { [[ -f "$img_src.xz" ]] && xz -dkc "$img_src.xz" >"$img_src"; } || fail "no $img_src"
+    truncate -s 8G "$target"
+    seed
+    # Older images: add the boot log to their initrd (scripts/bootlog-initrd.py)
+    off=$(sfdisk -J "$img_src" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["start"] * 512)')
+    MTOOLS_SKIP_CHECK=1 mcopy -n -o -i "$img_src@@$off" ::/vyos-pi/boot/initrd.img "$dir/initrd.target"
+    initrd_opt=()
+    if ! python3 -c 'import subprocess,sys; d=open(sys.argv[1],"rb").read(); sys.exit(0 if b"vyos-pi-bootlog" in subprocess.run(["zstd","-dc"],input=d,stdout=subprocess.PIPE).stdout else 1)' "$dir/initrd.target"; then
+      echo "   (image predates the boot log: adding it with scripts/bootlog-initrd.py)"
+      python3 "$root/scripts/bootlog-initrd.py" "$dir/initrd.target" "$dir/initrd.bootlog" >/dev/null
+      initrd_opt=(--initrd "$dir/initrd.bootlog")
+    fi
+    "$root/scripts/pi-trial-install.sh" --boot "$sdfat" --boot-partuuid "$sd_part" --config "$dir/config.boot" \
+      --trial-minutes 30 "${initrd_opt[@]}" "$img_src" "$target" | tee "$dir/install.log" || fail "pi-trial-install.sh failed"
+    grep -q '^# vyos-pi-trial' "$sdfat/tryboot.txt" || fail "no tryboot.txt"
+    for want in 'os_prefix=vyos-pi-trial/' 'kernel=Image' 'initramfs initrd.img followkernel' 'cmdline=cmdline.txt' 'kernel_watchdog_timeout=300'; do
+      grep -qxF "$want" "$sdfat/tryboot.txt" || fail "tryboot.txt lacks $want"
+    done
+    for f in Image initrd.img bcm2712-rpi-5-b.dtb bcm2712d0-rpi-5-b.dtb cmdline.txt trial.env overlays/bcm2712d0.dtbo overlays/vyos-pi-thermal.dtbo overlays/README pi-trial-install.sh; do
+      [[ -s $sdfat/vyos-pi-trial/$f ]] || fail "vyos-pi-trial/$f missing"
+    done
+    grep -q '^# the old OS' "$sdfat/config.txt" || fail "config.txt was changed"
+    root_uuid=$(sfdisk -J "$target" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][1]["uuid"].lower())')
+    cmd=$(cat "$sdfat/vyos-pi-trial/cmdline.txt")
+    echo "trial cmdline: $cmd"
+    for want in "live-media=/dev/disk/by-partuuid/$root_uuid" persistence-storage=filesystem \
+        "vyos-pi.trial=PARTUUID=$sd_part" "vyos-pi.bootlog=PARTUUID=$sd_part:/vyos-pi-trial/boot-log," console=ttyAMA10,115200 vyos-union=/boot/; do
+      [[ " $cmd " == *" $want"* ]] || fail "trial cmdline lacks $want"
+    done
+    python3 -I "$root/overlay/usr/libexec/vyos-pi/vyos-pi-bootsync" --patch-dtb "$sdfat/vyos-pi-trial/bcm2712-rpi-5-b.dtb" "$dir/check.dtb"
+    cmp -s "$dir/check.dtb" "$sdfat/vyos-pi-trial/bcm2712-rpi-5-b.dtb" || fail "the trial's device tree lacks the early-watchdog properties"
+    t_off=$(sfdisk -J "$target" | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["start"] * 512)')
+    [[ "$(MTOOLS_SKIP_CHECK=1 mtype -i "$target@@$t_off" ::/vyos-pi/reboot-after-minutes | tr -d '\r\n')" == 30 ]] || fail "no trial timer on the target"
+    ok "pi-trial-install.sh: image written, tryboot.txt and vyos-pi-trial/ on the boot partition, config.txt untouched, trial timer on the target"
+    # The fake SD card: MBR (disk id $sd_id), one FAT32 partition with sdfat/.
+    truncate -s 512M "$dir/sd.img"
+    printf 'label: dos\nlabel-id: 0x%s\nstart=2048, type=c\n' "$sd_id" | sfdisk -q "$dir/sd.img"
+    mkfs.vfat -F 32 --offset 2048 "$dir/sd.img" $((510 * 1024)) >/dev/null
+    MTOOLS_SKIP_CHECK=1 mcopy -s -i "$dir/sd.img@@$((2048 * 512))" "$sdfat"/* ::/
+    # What the firmware boots in tryboot mode: tryboot.txt's os_prefix files.
+    start_vm --reset --image "$target" --disk2 "$dir/sd.img" --kernel "$sdfat/vyos-pi-trial/Image" \
+      --initrd "$sdfat/vyos-pi-trial/initrd.img" --cmdline-file "$sdfat/vyos-pi-trial/cmdline.txt" \
+      || fail "trial boot: no kernel"
+    wait_ssh || fail "the trial boot never came up (SSH with the seeded key)"
+    wait_ready || fail "vyos-router never became active"
+    [[ "$(vsh hostname)" == vyos-pi-test ]] || fail "seed config not loaded in the trial"
+    vsh 'cat /proc/cmdline' | grep -q "vyos-pi.trial=PARTUUID=$sd_part" || fail "not booted with the trial command line"
+    vsh 'findmnt -no SOURCE /usr/lib/live/mount/persistence' | grep -q '^/dev/vda2$' || fail "VyOS's root is not the target's partition 2"
+    ok "trial boot: VyOS up from the target disk with the trial command line"
+    vsh "sudo mount /dev/disk/by-partuuid/$sd_part /mnt && ls /mnt/vyos-pi-trial/boot-log; r=0; for s in initramfs initramfs-done; do ls /mnt/vyos-pi-trial/boot-log/*-\$s.txt >/dev/null 2>&1 || r=1; done; sudo umount /mnt; exit \$r" \
+      || fail "initramfs boot logs missing from the SD card"
+    # (initramfs-top is there on a Pi, whose disks are built in; the VM's
+    # virtio disk driver is a module that only udev loads)
+    ok "boot logs on the SD card (initramfs, initramfs-done)"
+    sdcopy=/tmp/pi-trial-install.sh
+    vsh "sudo mount /dev/disk/by-partuuid/$sd_part /mnt && cp /mnt/vyos-pi-trial/pi-trial-install.sh $sdcopy && sudo umount /mnt"
+    vsh "sudo bash $sdcopy --commit --force" || fail "--commit failed"
+    vsh "sudo mount /dev/disk/by-partuuid/$sd_part /mnt; r=0; test ! -e /mnt/config.txt && test -f /mnt/config.txt.vyos-pi-committed && test ! -e /mnt/tryboot.txt || r=1; grep -q STATE=committed /mnt/vyos-pi-trial/trial.env || r=1; sudo umount /mnt; exit \$r" \
+      || fail "--commit did not disable config.txt / tryboot.txt on the SD card"
+    vsh 'sudo bash -c ". /usr/libexec/vyos-pi/common.sh; mount_esp; test ! -e \$ESP_MNT/vyos-pi/reboot-after-minutes; r=\$?; umount_esp; exit \$r"' \
+      || fail "--commit left the trial timer on the target"
+    ok "--commit (from VyOS): SD config.txt renamed, tryboot.txt gone, trial timer removed"
+    vsh "sudo bash $sdcopy --uncommit" || fail "--uncommit failed"
+    vsh "sudo mount /dev/disk/by-partuuid/$sd_part /mnt; grep -q '^# the old OS' /mnt/config.txt; r=\$?; sudo umount /mnt; exit \$r" \
+      || fail "--uncommit did not restore config.txt"
+    ok "--uncommit: config.txt is back"
+    ;;
+  panic)
+    [[ -f "$dir/sd.img" && -f "$dir/sdfat/vyos-pi-trial/cmdline.txt" ]] || fail "run vm/test.sh trialboot pi5 first"
+    rm -f "$dir/console.log"
+    sdfat=$dir/sdfat
+    start=$(date +%s)
+    "$root/vm/run.sh" --pi5 --headless --image "$dir/trial-target.img" --disk2 "$dir/sd.img" --no-reboot \
+      --kernel "$sdfat/vyos-pi-trial/Image" --initrd "$sdfat/vyos-pi-trial/initrd.img" \
+      --cmdline-file "$sdfat/vyos-pi-trial/cmdline.txt" \
+      --cmdline-sed 's|live-media=/dev/disk/by-partuuid/[^ ]*|live-media=/dev/disk/by-partuuid/00000000-0000-0000-0000-000000000000|'
+    pid=$(cat "$dir/qemu.pid")
+    # live-boot looks for 60 s, then panic=10: well within 15 minutes under TCG
+    for _ in $(seq 180); do kill -0 "$pid" 2>/dev/null || break; sleep 5; done
+    kill -0 "$pid" 2>/dev/null && fail "still running after 15 minutes: a missing root did not reboot"
+    grep -aq 'Rebooting automatically due to panic= boot argument' "$dir/console.log" \
+      || fail "QEMU stopped, but not through panic= (see console.log)"
+    ok "missing root: reboots by itself after $(( $(date +%s) - start )) s (panic=10), no initramfs shell"
+    MTOOLS_SKIP_CHECK=1 mdir -b -i "$dir/sd.img@@$((2048 * 512))" ::/vyos-pi-trial/boot-log | grep -q 'initramfs-panic.txt' \
+      || fail "no initramfs-panic boot log on the SD card"
+    ok "the panic left a boot log on the SD card (initramfs-panic)"
+    ;;
+  *) echo "usage: $0 image|trial|ids|direct|trialboot|panic|upgrade [pi5|pi4] [ISO]" >&2; exit 2 ;;
 esac
 stop

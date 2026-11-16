@@ -102,7 +102,7 @@ jobs:
       - name: Install image tools
         if: steps.existing.outputs.skip != 'true'
         run: |
-          sudo apt-get update && sudo apt-get install -y mtools gdisk fdisk xz-utils unzip python3-venv
+          sudo apt-get update && sudo apt-get install -y mtools gdisk fdisk xz-utils unzip python3-venv device-tree-compiler
           # virt-fw-vars presets the Pi 4 UEFI's variables (scripts/build-image.sh)
           python3 -m venv "$RUNNER_TEMP/vfw" && "$RUNNER_TEMP/vfw/bin/pip" install -q virt-firmware==25.12 "setuptools<81"  # it imports pkg_resources
           echo "$RUNNER_TEMP/vfw/bin" >>"$GITHUB_PATH"

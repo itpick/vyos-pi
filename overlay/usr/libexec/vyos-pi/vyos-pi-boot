@@ -106,7 +106,22 @@ schedule_reboot() {
 	systemctl start --no-block vyos-pi-trial.service
 }
 
+# Builds of 2026-11-16 put panic=10 into VyOS's GRUB boot options; VyOS then
+# saw a kernel option it did not set and tried a kexec at every boot. Take it
+# out of the image entries again (the initramfs sets the panic timeout).
+grub_panic() {
+	local f dir
+	dir=$(/opt/vyatta/sbin/vyos-persistpath 2>/dev/null)/boot/grub/grub.cfg.d/vyos-versions
+	for f in "$dir"/*.cfg; do
+		[ -f "$f" ] || continue
+		grep -q '^[[:space:]]*set boot_opts="[^"]*biosdevname=0 panic=10 vyos-union=' "$f" || continue
+		sed -i 's/^\([[:space:]]*set boot_opts="[^"]*biosdevname=0\) panic=10 vyos-union=/\1 vyos-union=/' "$f" \
+			&& log "grub: removed panic=10 from the boot options in ${f##*/}"
+	done
+}
+
 grow_root
+grub_panic
 
 if mount_esp; then
 	dir=$ESP_MNT/vyos-pi
@@ -119,4 +134,7 @@ else
 fi
 
 [ -n "$trial" ] && /usr/libexec/vyos-pi/vyos-pi-diag boot
+# Boot log to the FAT partition(s) on the command line (vyos-pi.bootlog=):
+# systemd got this far, VyOS has not loaded its config yet.
+/usr/libexec/vyos-pi/vyos-pi-bootlog early >/dev/null 2>&1
 exit 0

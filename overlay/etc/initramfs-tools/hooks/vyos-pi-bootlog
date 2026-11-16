@@ -1,0 +1,14 @@
+#!/bin/sh
+# vyos-pi: put vyos-pi-bootlog and what it needs (FAT, code pages) into the
+# initramfs, and hook it into live-boot's panic (see vyos-pi-bootlog).
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+
+copy_file script /usr/libexec/vyos-pi/vyos-pi-bootlog /bin/vyos-pi-bootlog
+mkdir -p "${DESTDIR}/lib/live/boot"
+copy_file script /usr/lib/vyos-pi/9999-vyos-pi-bootlog.sh /lib/live/boot/9999-vyos-pi-bootlog.sh
+for m in vfat nls_cp437 nls_ascii nls_utf8 nls_iso8859-1; do
+	manual_add_modules "$m"
+done

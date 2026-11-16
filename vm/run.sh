@@ -14,6 +14,13 @@
 #                   partition (vyos-pi/boot/), as the Pi 5 firmware would
 #                   (with QEMU's device tree, and console ttyAMA0 for ttyAMA10)
 #     --image FILE  base image (raw or qcow2): out/vyos-pi-<board>.img
+#     --kernel F --initrd F --cmdline-file F
+#                   boot this kernel/initrd/command line (like --direct, but
+#                   from files: a trial boot's vyos-pi-trial/ folder); the
+#                   Pi 5 UART names are mapped as for --direct
+#     --cmdline-sed EXPR   edit the direct-boot command line (sed expression)
+#     --disk2 FILE  a second virtio disk, raw (a fake SD card for trial boots)
+#     --no-reboot   QEMU exits when the guest reboots (panic= tests)
 #
 # Each profile has its own overlay disk and ports, so both can run at once.
 # VM dir: $VYOS_PI_VM_DIR/<profile> (default .work/vm/<profile>).
@@ -29,7 +36,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 
-profile=pi5 headless=0 reset=0 direct=0 base=""
+profile=pi5 headless=0 reset=0 direct=0 base="" kernel="" initrd="" cmdfile="" cmdsed="" disk2="" noreboot=0
 while (( $# )); do
   case "$1" in
     --pi5) profile=pi5 ;;
@@ -38,6 +45,12 @@ while (( $# )); do
     --headless) headless=1 ;;
     --direct) direct=1 ;;
     --image) base=$(realpath "$2"); shift ;;
+    --kernel) kernel=$(realpath "$2"); shift ;;
+    --initrd) initrd=$(realpath "$2"); shift ;;
+    --cmdline-file) cmdfile=$(realpath "$2"); shift ;;
+    --cmdline-sed) cmdsed=$2; shift ;;
+    --disk2) disk2=$(realpath "$2"); shift ;;
+    --no-reboot) noreboot=1 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
   shift
@@ -88,9 +101,18 @@ print(struct.unpack_from("<Q", d, lba * 512 + 32)[0] * 512)' disk.raw.tmp)
     MTOOLS_SKIP_CHECK=1 mcopy -n -i "disk.raw.tmp@@$off" "::/$f" "${f##*/}"
   done
   rm -f disk.raw.tmp
-  cmdline=$(tr -d '\n' < cmdline.txt | sed 's/console=ttyAMA10/console=ttyAMA0/')
+  cmdfile=$dir/cmdline.txt
+  kernel=$dir/Image initrd=$dir/initrd.img
+fi
+if [[ -n $kernel ]]; then
+  [[ -n $initrd && -n $cmdfile ]] || { echo "--kernel needs --initrd and --cmdline-file" >&2; exit 2; }
+  # QEMU virt's UART is a PL011 at 0x9000000, ttyAMA0; the Pi 5's debug UART
+  # is ttyAMA10 at 0x107d001000.
+  sed_args=(-e 's/console=ttyAMA10/console=ttyAMA0/' -e 's/earlycon=pl011,0x107d001000,115200n8/earlycon=pl011,0x9000000/')
+  [[ -n $cmdsed ]] && sed_args+=(-e "$cmdsed")
+  cmdline=$(tr -d '\n' < "$cmdfile" | sed "${sed_args[@]}")
   echo "direct boot: $cmdline"
-  boot=(-kernel Image -initrd initrd.img -append "$cmdline")
+  boot=(-kernel "$kernel" -initrd "$initrd" -append "$cmdline")
 fi
 
 # shellcheck disable=SC2054 # commas are QEMU option syntax
@@ -109,6 +131,8 @@ args=(
   -device virtio-rng-pci
   -display none
 )
+(( noreboot )) && args+=(-no-reboot)
+[[ -n $disk2 ]] && args+=(-drive "if=virtio,format=raw,file=$disk2,cache=writeback")
 
 if (( headless )); then
   rm -f console.sock monitor.sock

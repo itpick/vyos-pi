@@ -1,0 +1,52 @@
+// vyos-pi: the BCM2712's temperature sensor and a CPU thermal zone for the
+// mainline Pi 5 device tree, which has neither (6.18), as
+// overlays/vyos-pi-thermal.dtbo (config.txt: dtoverlay=vyos-pi-thermal).
+//
+// The sensor is the AVS monitor's (bcm2711_thermal, a module in the image),
+// with the slope and offset of Raspberry Pi's own bcm2712 tree. The zone has
+// only the critical trip (110 C: the kernel shuts down). The fan is not
+// driven: it hangs off an RP1 PWM that mainline 6.18 has no driver for, so
+// there are no active trips to drive it.
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2712";
+
+	fragment@0 {
+		target-path = "/soc@107c000000";
+		__overlay__ {
+			avs-monitor@7d542000 {
+				compatible = "brcm,bcm2711-avs-monitor", "syscon", "simple-mfd";
+				reg = <0x7d542000 0xf00>;
+
+				vyos_pi_thermal: thermal {
+					compatible = "brcm,bcm2711-thermal";
+					#thermal-sensor-cells = <0>;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			thermal-zones {
+				cpu-thermal {
+					polling-delay-passive = <0>;	// mainline: not above polling-delay (-EINVAL)
+					polling-delay = <1000>;
+					coefficients = <(-550) 450000>;
+					thermal-sensors = <&vyos_pi_thermal>;
+
+					trips {
+						cpu-crit {
+							temperature = <110000>;
+							hysteresis = <0>;
+							type = "critical";
+						};
+					};
+				};
+			};
+		};
+	};
+};

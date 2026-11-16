@@ -4,9 +4,30 @@
 # data/live-build-config/hooks/live/.
 set -e
 
-echo "I: vyos-pi: enabling the boot hook and the Pi 5 boot file sync"
-chmod 755 /usr/libexec/vyos-pi/*
-systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
+echo "I: vyos-pi: enabling the boot hook, the Pi 5 boot file sync and the boot log"
+chmod 755 /usr/libexec/vyos-pi/* \
+	/etc/initramfs-tools/hooks/vyos-pi-bootlog /etc/initramfs-tools/scripts/init-top/00-vyos-pi-bootlog \
+	/etc/initramfs-tools/scripts/init-premount/vyos-pi-bootlog \
+	/etc/initramfs-tools/scripts/init-bottom/vyos-pi-bootlog
+systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service vyos-pi-bootlog.service \
+	vyos-pi-clock.service vyos-pi-clock-save.timer
+
+# VyOS applies changed kernel options ("system option kernel ...") at boot by
+# kexec'ing /boot/vmlinuz with the new command line. On the Pi 5 there is no
+# EFI and the firmware, not GRUB, loads a different kernel file (cmdline.txt,
+# device tree fixups), so that kexec fails ("Commit error" at every boot) and
+# could not work anyway. Without EFI, skip it: VyOS then asks for a reboot.
+echo "I: vyos-pi: no boot-time kexec without EFI (Pi 5 direct boot)"
+opt_py=/usr/libexec/vyos/conf_mode/system_option.py
+grep -q "if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD'):" "$opt_py"
+sed -i "s|if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD'):|if not boot_configuration_complete() and os.getenv('VYOS_CONFIGD') and os.path.isdir('/sys/firmware/efi'):|" "$opt_py"
+grep -q "os.getenv('VYOS_CONFIGD') and os.path.isdir('/sys/firmware/efi'):" "$opt_py"
+
+# The boot log in the initramfs (etc/initramfs-tools/hooks/vyos-pi-bootlog).
+# live-build may build the initramfs again later; scripts/build-iso.sh checks
+# the ISO's initrd has it.
+echo "I: vyos-pi: rebuilding the initramfs with the boot log"
+update-initramfs -u -k all || echo "W: vyos-pi: update-initramfs failed here; relying on live-build's"
 
 # Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
 # images be redistributed when the VyOS branding is replaced; scripts/build-iso.sh

@@ -64,7 +64,7 @@
 <main>
   <h1>VyOS for Raspberry Pi</h1>
   <p class="sub">Flash-and-boot VyOS rolling (arm64) images, built from VyOS's public sources with a Raspberry Pi kernel.</p>
-  <p class="note">Unofficial community build, not affiliated with or supported by VyOS Networks. <strong>The Pi 5 image has booted on a real Pi 5; the Pi 4 image is tested in QEMU only.</strong> Fine for labs; keep a working router nearby.</p>
+  <p class="note">Unofficial community build, not affiliated with or supported by VyOS Networks. <strong>The Pi 5 image has booted on one real board (16 GB, from NVMe); the Pi 4 image has only run in QEMU.</strong> Fine for labs; keep a working router nearby.</p>
 
   <div class="boards">
     <div class="card">
@@ -88,6 +88,8 @@
         <li>Onboard Ethernet: RP1 (<code>macb</code> + mainline RP1 driver)</li>
         <li><code>add system image</code> upgrades: boot files follow on the FAT partition</li>
         <li>AES hardware on Cortex-A76; fan not driven by the kernel yet</li>
+        <li>Console on the debug UART; HDMI shows only the firmware's screens</li>
+        <li>2 GB and 16 GB (D0) boards need a release after 2026.11.16-1</li>
       </ul>
       <a class="btn secondary" href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz">Download for Pi 5</a>
       <div class="small"><a href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz.sha256">sha256</a> &middot; <a href="https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-arm64.iso">upgrade ISO</a></div>
@@ -117,7 +119,16 @@
   </table></div>
   <p class="fine">x86: <a href="https://github.com/itpick/sensr/blob/main/docs/research/07-performance-evaluation.md">sensr benchmark</a>, median of 5 boots from <code>virsh start</code>, virtio, boot loader delays as shipped; "1k rules" is 1,000 rules plus a 10k-entry table. Pi 5: 16&nbsp;GB boards, timed from the reboot command, so shutdown, firmware and loader come first: 36&ndash;38&nbsp;s on OPNsense (UEFI), 14&nbsp;s on VyOS (Pi firmware boots the kernel directly). OPNsense from its own boot logs over 7 typical reboots (1&nbsp;s resolution); it keeps starting services until 81&ndash;85&nbsp;s. VyOS from 2 warm reboots, its journal plus a 1&nbsp;s external watcher; "traffic flowing" is its LAN port up with an address. VyOS has no web UI: for VyOS, "UI/API ready" means its HTTP API (SSH and the CLI otherwise); the test board has no HTTP API configured, so the Pi 5 figure is SSH.</p>
 
-  <h3>One-liner (Linux)</h3>
+  <h3>Try it on a Pi 5 that already runs another OS (recommended)</h3>
+  <p><a href="https://github.com/itpick/vyos-pi/blob/main/scripts/pi-trial-install.sh">pi-trial-install.sh</a> writes vyos-pi to an NVMe or USB disk and boots it <em>once</em> through the firmware's <code>tryboot</code>, keeping Raspberry Pi OS or Ubuntu as the default. If VyOS fails in any way, the Pi comes back to the old OS by itself, with boot logs on its boot partition. Happy with VyOS: <code>--commit</code> makes it the default. <a href="https://github.com/itpick/vyos-pi#try-it-on-a-pi-that-already-runs-another-os">How it works</a>.</p>
+  <div class="cmd">
+    <pre id="trial">curl -fLO https://raw.githubusercontent.com/itpick/vyos-pi/main/scripts/pi-trial-install.sh &amp;&amp; chmod +x pi-trial-install.sh
+sudo ./pi-trial-install.sh https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz /dev/nvme0n1
+sudo ./pi-trial-install.sh --reboot</pre>
+    <button class="copy" data-target="trial">Copy</button>
+  </div>
+
+  <h3>One-liner (Linux): a fresh card or disk</h3>
   <p>Writes the Pi 5 image straight to a disk. Replace <code>/dev/sdX</code>; everything on it is erased.</p>
   <div class="cmd">
     <pre id="oneliner">curl -fL https://github.com/itpick/vyos-pi/releases/latest/download/vyos-pi-pi5.img.xz | xz -dc | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress</pre>
@@ -129,7 +140,7 @@
   <ol>
     <li>Update the EEPROM bootloader first (Raspberry Pi OS: <code>sudo rpi-eeprom-update -a</code>).</li>
     <li>Optional, before the first boot: make a <code>config.boot</code> with <a href="https://github.com/itpick/vyos-pi/blob/main/scripts/seed-config.py">seed-config.py</a> (hostname, SSH key, LAN/WAN by MAC, DHCP, DNS, NAT, firewall) and copy it to <code>vyos-pi/config.boot</code> on the card's FAT partition.</li>
-    <li>Boot. The root partition grows to fill the card. Log in on HDMI (or the serial console) as <code>vyos</code> / <code>vyos</code> and change the password.</li>
+    <li>Boot. The root partition grows to fill the card. Log in on the serial console (Pi 4: or HDMI) as <code>vyos</code> / <code>vyos</code> and change the password, or SSH in with the seeded key.</li>
     <li>Without a seed, configure from the CLI: <code>configure</code>, then <code>set interfaces ethernet eth0 address dhcp</code> and so on (<a href="https://docs.vyos.io/en/latest/quick-start.html">VyOS quick start</a>).</li>
   </ol>
 

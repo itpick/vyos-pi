@@ -1,0 +1,19 @@
+[Unit]
+Description=vyos-pi: boot log to the FAT partition (vyos-pi.bootlog= on the kernel command line)
+Documentation=https://github.com/itpick/vyos-pi#when-a-pi-does-not-come-up
+After=local-fs.target vyos-router.service
+ConditionKernelCommandLine=vyos-pi.bootlog
+
+[Service]
+# Once VyOS has loaded its config (vyos-router.service is Type=simple, so
+# wait for its status file; without blocking the boot: Type=simple), and
+# again at shutdown.
+Type=simple
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'i=0; while [ ! -e /tmp/vyos-config-status ] && [ $$i -lt 600 ]; do sleep 1; i=$$((i+1)); done; exec /usr/libexec/vyos-pi/vyos-pi-bootlog running'
+ExecStop=/usr/libexec/vyos-pi/vyos-pi-bootlog shutdown
+TimeoutStartSec=12min
+TimeoutStopSec=2min
+
+[Install]
+WantedBy=vyos.target

@@ -1,0 +1,8 @@
+#!/bin/sh
+# vyos-pi: boot log to the FAT partition(s) named by vyos-pi.bootlog=, before
+# live-boot looks for VyOS's root (the kernel's device probing so far).
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+[ -x /bin/vyos-pi-bootlog ] && /bin/vyos-pi-bootlog initramfs </dev/null
+exit 0

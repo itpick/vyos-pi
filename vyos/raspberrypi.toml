@@ -21,8 +21,10 @@ packages = [
   console_num = '0'
   console_speed = "115200"
 
-# VyOS's default config with a serial console on ttyAMA0 (the Pi's UART0 under
-# UEFI, and QEMU virt's UART). HDMI gets a login prompt on tty1 either way.
+# VyOS's default config with serial consoles on ttyAMA0 (the Pi 4's UART0
+# under UEFI, and QEMU virt's UART) and ttyAMA10 (the Pi 5's debug UART with
+# the mainline device tree); VyOS warns about the one a board does not have.
+# HDMI gets a login prompt on tty1 either way.
 [[includes_chroot]]
   path = "usr/share/vyos/config.boot.default"
   data = '''
@@ -56,6 +58,9 @@ system {
     }
     console {
         device ttyAMA0 {
+            speed "115200"
+        }
+        device ttyAMA10 {
             speed "115200"
         }
     }
