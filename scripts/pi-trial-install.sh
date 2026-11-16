@@ -29,6 +29,13 @@
 #   pi-trial-install.sh [options] --no-write TARGET
 #                                                arm a trial of what TARGET has
 #   pi-trial-install.sh --reboot                 reboot into the trial (once)
+#   pi-trial-install.sh --reboot-target          after a good trial: boot the
+#                                                target once the way it will
+#                                                boot when committed (its own
+#                                                config.txt, kernel, cmdline),
+#                                                through a one-time boot order;
+#                                                the next reset of any kind
+#                                                comes back here
 #   pi-trial-install.sh --status                 trial state, boot logs
 #   pi-trial-install.sh --cancel                 remove the trial (old OS)
 #   pi-trial-install.sh --commit                 from the trial VyOS, once you
@@ -81,6 +88,7 @@ while (( $# )); do
     --reboot) do_reboot=1 ;;
     --force) force=1 ;;
     --no-write) no_write=1 ;;
+    --reboot-target) action=reboot-target ;;
     --status) action=status ;;
     --cancel) action=cancel ;;
     --commit) action=commit ;;
@@ -276,7 +284,7 @@ write_trial_files() {  # BOOTDIR TARGET ROOT_UUID ESP_UUID BOOT_UUID
     "vyos-pi.trial=PARTUUID=$boot_uuid")
   echo "${opts[*]}" >"$d/cmdline.txt"
 
-  cat >"$d/trial.env" <<EOF
+  cat >"$tmp/trial.env" <<EOF
 # written by $PROG $(date -u +%Y-%m-%dT%H:%M:%SZ)
 VERSION=$(cat "$tmp/version")
 TARGET=$target
@@ -286,6 +294,10 @@ BOOT_PARTUUID=$boot_uuid
 TRIAL_MINUTES=$trial_minutes
 STATE=armed
 EOF
+  cp "$tmp/trial.env" "$d/trial.env"
+  # and on the target, where --commit finds the boot partition when VyOS was
+  # not started by the trial (--reboot-target)
+  t_put "$tmp/trial.env" vyos-pi/trial.env
   [[ -f $0 ]] && cp "$0" "$d/pi-trial-install.sh"
   cat >"$d/README.txt" <<EOF
 vyos-pi trial boot (https://github.com/itpick/vyos-pi#try-it-on-a-pi-that-runs-another-os)
@@ -474,6 +486,30 @@ do_tryboot() {
   reboot '0 tryboot'
 }
 
+env_get() { sed -n "s/^$1=//p" "$2" | tail -1; }
+
+# One boot of the target through its own config.txt: the boot order for the
+# next reboot only (Pi 5 firmware: "set_reboot_order", mailbox tag 0x0003808b,
+# https://www.raspberrypi.com/documentation/computers/config_txt.html#set_reboot_order).
+# The target's device first, then the SD card, so a failure there lands back
+# here on the next reset.
+do_reboot_target() {
+  local b env target order
+  [[ $(id -u) == 0 ]] || die "run as root"
+  in_vyos && die "run this on the old OS"
+  b=$(find_boot_dir)
+  env=$b/$PREFIX/trial.env
+  [[ -f $env ]] || die "no trial set up on $b"
+  target=$(env_get TARGET "$env")
+  [[ -b $target ]] || die "$target (the trial's target) is not here"
+  command -v vcmailbox >/dev/null || die "needs vcmailbox (Ubuntu: libraspberrypi-bin; Pi OS: raspi-utils)"
+  case "$target" in /dev/nvme*) order=0xf416 ;; *) order=0xf614 ;; esac
+  say "next boot only: BOOT_ORDER=$order (the target first); any later reset boots from here again"
+  vcmailbox 0x0003808b 4 4 "$order" >/dev/null || die "vcmailbox failed"
+  sync
+  reboot
+}
+
 # The trial's boot partition: from the kernel command line (in VyOS), or --boot.
 # Sets B (not a $(...) subshell: the mount must be undone by this shell).
 open_trial_boot() {
@@ -484,7 +520,18 @@ open_trial_boot() {
   done
   if [[ -z $id ]]; then
     if ! in_vyos; then B=$(find_boot_dir); return; fi
-    die "not booted as a trial (no vyos-pi.trial= on the kernel command line); give the card's boot partition with --boot DIR"
+    # VyOS started from the target itself (--reboot-target): the installer
+    # left trial.env on the target's FAT partition
+    local esp
+    esp=$(bash -c '. /usr/libexec/vyos-pi/common.sh; find_esp' 2>/dev/null)
+    if [[ -n $esp ]]; then
+      mkdir -p "$tmp/esp"
+      if mount -t vfat -o ro "$esp" "$tmp/esp" 2>/dev/null; then
+        id=$(env_get BOOT_PARTUUID "$tmp/esp/vyos-pi/trial.env" 2>/dev/null)
+        umount "$tmp/esp"
+      fi
+    fi
+    [[ -n $id ]] || die "no vyos-pi.trial= on the kernel command line and no vyos-pi/trial.env on this disk's FAT partition; give the card's boot partition with --boot DIR"
   fi
   dev=/dev/disk/by-partuuid/$id
   [[ -b $dev ]] || die "the trial's boot partition (PARTUUID=$id) is not here"
@@ -510,7 +557,6 @@ open_target_esp() {
   mounts+=("$T_DIR")
 }
 
-env_get() { sed -n "s/^$1=//p" "$2" | tail -1; }
 
 do_commit() {
   local b env
@@ -619,6 +665,7 @@ do_status() {
 case "$action" in
   install) do_install ;;
   reboot) do_tryboot ;;
+  reboot-target) do_reboot_target ;;
   status) do_status ;;
   cancel) do_cancel ;;
   commit) do_commit ;;

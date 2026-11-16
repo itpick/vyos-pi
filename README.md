@@ -53,7 +53,10 @@ chmod +x pi-trial-install.sh
 ./pi-trial-install.sh --reboot          # VyOS, once
 # ... back on the old OS, after VyOS rebooted (or failed):
 ./pi-trial-install.sh --status          # what happened; boot logs
-# ... or, logged in to VyOS and happy with it:
+# happy with the trial: boot the disk once on its own, as it will boot when
+# committed (its own config.txt and kernel; any later reset comes back here)
+./pi-trial-install.sh --reboot-target
+# ... logged in to that VyOS and still happy:
 sudo /usr/libexec/vyos-pi/pi-trial-install --commit   # VyOS becomes the default
 ```
 
@@ -104,6 +107,13 @@ Images up to 2026.11.16-1 do not open the watchdog from systemd, so on those the
 watchdog also resets a healthy trial after `--watchdog-seconds` (raise it to
 cover your test; their initrd also lacks the boot log:
 `scripts/bootlog-initrd.py` adds it, `--initrd`).
+
+`--reboot-target` tests the committed boot path before you commit: the
+trial boots VyOS's kernel from the SD card, a committed Pi boots it from the
+target's own FAT partition with its `config.txt`. It sets the boot order for
+the next reboot only (the firmware's `set_reboot_order`, through `vcmailbox
+0x0003808b`), target first, then the SD card; the reboot after that, of any
+kind, uses `BOOT_ORDER` again and starts the old OS.
 
 `--commit` (on VyOS, as root; or this script from the SD card's
 `vyos-pi-trial/`) makes VyOS the default without touching the EEPROM: it
