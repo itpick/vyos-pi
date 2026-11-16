@@ -565,7 +565,9 @@ do_commit() {
   env=$b/$PREFIX/trial.env
   [[ -f $env ]] || die "no $PREFIX/trial.env on $b: not a vyos-pi trial boot partition"
   if in_vyos && (( ! force )); then
-    [[ $(dt_u32 tryboot) == 1 ]] || warn "this boot is not a tryboot (the firmware's flag is not set)"
+    if grep -q 'vyos-pi.trial=' /proc/cmdline && [[ $(dt_u32 tryboot) != 1 ]]; then
+      warn "booted with the trial's command line, but not as a tryboot (the firmware's flag is not set)"
+    fi
   fi
   [[ -f $b/config.txt ]] || die "$b/config.txt is already gone (committed?)"
   # The target must boot on its own: its config.txt, and the overlays the

@@ -33,7 +33,7 @@
 		__overlay__ {
 			thermal-zones {
 				cpu-thermal {
-					polling-delay-passive = <2000>;
+					polling-delay-passive = <0>;	// mainline: not above polling-delay (-EINVAL)
 					polling-delay = <1000>;
 					coefficients = <(-550) 450000>;
 					thermal-sensors = <&vyos_pi_thermal>;
