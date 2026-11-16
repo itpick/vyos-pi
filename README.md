@@ -223,7 +223,8 @@ arm64 VyOS on amd64 under emulation is slow and known to be flaky. Steps:
 runners for every pull request and tag. Inputs are pinned in
 [`versions.env`](versions.env) (vyos-build commit, kernel tarball sha256, UEFI
 zip sha256). VyOS's own packages come from its rolling repository on the day of
-the build, which cannot be pinned; each image's manifest
+the build, which cannot be pinned (and the build fails while that repository
+is down, as it was for an hour on 2026-11-16); each image's manifest
 (`vyos-pi-<board>.manifest.txt`, also `/usr/share/vyos-pi/manifest.txt`) lists
 what went in.
 
