@@ -16,3 +16,19 @@
 | pi5-ubuntu-eth0 | TCP router → Mac x4 | 924 | 2665 |  | 9.3 (15/6/9/6) | 25 | 7 / 957 | 63.9 |
 | pi5-ubuntu-eth0 | UDP Mac → router x1 @1G | 954 |  | 0.53 / 0.008 | 20.3 (28/22/19/12) | 35 | 1000 / 0 | 66.1 |
 | pi5-ubuntu-eth0 | UDP router → Mac x1 @1G | 954 |  | 0.28 / 0.019 | 14.6 (19/13/16/10) | 39 | 0 / 1007 | 65.0 |
+| pi5-vyos-eth0 | TCP Mac → router x1 | 789 | 0 |  | 15.6 (27/15/13/8) | 46 | 877 / 16 | n/a |
+| pi5-vyos-eth0 | TCP router → Mac x1 | 911 | 6594 |  | 3.7 (6/4/1/4) | 11 | 3 / 952 | n/a |
+| pi5-vyos-eth0 | TCP Mac → router x4 | 727 | 443 |  | 10.0 (17/9/4/9) | 34 | 788 / 16 | n/a |
+| pi5-vyos-eth0 | TCP router → Mac x4 | 927 | 4556 |  | 6.2 (7/5/6/6) | 14 | 6 / 960 | n/a |
+| pi5-vyos-eth0 | UDP Mac → router x1 @1G | 954 |  | 0.66 / 0.011 | 20.7 (32/13/19/19) | 44 | 998 / 0 | n/a |
+| pi5-vyos-eth0 | UDP router → Mac x1 @1G | 955 |  | 0.11 / 0.019 | 20.3 (17/28/20/17) | 44 | 0 / 2012 | n/a |
+| pi5-vyos-eth0-repeat | TCP Mac → router x1 | 818 | 232 |  | 22.8 (40/20/17/14) | 47 | 894 / 16 | n/a |
+| pi5-vyos-eth0-repeat | TCP router → Mac x1 | 583 | 817 |  | 5.5 (10/4/6/2) | 17 | 4 / 957 | n/a |
+| pi5-vyos-eth0-repeat | TCP Mac → router x4 | 739 | 356 |  | 13.5 (24/12/10/8) | 45 | 819 / 17 | n/a |
+| pi5-vyos-eth0-repeat | TCP router → Mac x4 | 910 | 24682 |  | 4.7 (9/3/4/3) | 12 | 6 / 959 | n/a |
+| pi5-vyos-eth0-just-booted | TCP Mac → router x1 | 807 | 0 |  | n/a |  |  | n/a |
+| pi5-vyos-eth0-just-booted | TCP router → Mac x1 | 726 | 751 |  | n/a |  |  | n/a |
+| pi5-vyos-eth0-just-booted | TCP Mac → router x4 | 486 | 376 |  | n/a |  |  | n/a |
+| pi5-vyos-eth0-just-booted | TCP router → Mac x4 | 587 | 5042 |  | n/a |  |  | n/a |
+| pi5-vyos-eth0-just-booted | UDP Mac → router x1 @1G | 826 |  | 0.2 / 0.01 | n/a |  |  | n/a |
+| pi5-vyos-eth0-just-booted | UDP router → Mac x1 @1G | 954 |  | 0.15 / 0.018 | n/a |  |  | n/a |
