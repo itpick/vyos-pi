@@ -251,6 +251,15 @@ class ParityTest(unittest.TestCase):
         trusted, _ = find(fwd, 'Trusted IoT to the LAN (cast ports)')
         self.assertTrue(feodo < wg < trusted)
 
+    def test_invalid_dropped_per_chain_not_globally(self):
+        fw = self.cfg['firewall']
+        self.assertNotIn('invalid', fw['global-options']['state-policy'])
+        self.assertIn('established', fw['global-options']['state-policy'])
+        for fam in ('ipv4', 'ipv6'):
+            for hook in ('input', 'forward'):
+                r = fw[fam][hook]['filter']['rule 1']
+                self.assertEqual((r['action'], r['state']), (['drop'], ['invalid']))
+
     def test_natural_uuid_order(self):
         key = conv.Converter._natural
         self.assertLess(key('6e8e67d8'), key('12e06f06'))

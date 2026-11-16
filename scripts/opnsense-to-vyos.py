@@ -624,12 +624,18 @@ class Converter:
         sp = at(fw, 'global-options', 'state-policy')
         leaf(sp, ['established', 'action'], 'accept')
         leaf(sp, ['related', 'action'], 'accept')
-        leaf(sp, ['invalid', 'action'], 'drop')
+        # "invalid" is dropped per chain, not in the global state-policy: VyOS applies the
+        # global one to the bridge family too, where ARP is conntrack-invalid, so a global
+        # invalid-drop breaks ARP on every bridge (container networks, bridged LANs)
         chains = {}
         for fam in ('ipv4', 'ipv6'):
             for hook in ('input', 'forward'):
                 c = at(fw, fam, hook, 'filter')
                 leaf(c, ['default-action'], 'drop')
+                r = at(c, 'rule 1')
+                leaf(r, ['action'], 'drop')
+                leaf(r, ['description'], 'invalid connection state')
+                leaf(r, ['state'], 'invalid')
                 chains[(fam, hook)] = c
         num = {k: 0 for k in chains}
 
@@ -1064,8 +1070,12 @@ class Converter:
             if text(a, 'enabled', '1') == '1':
                 self.note('dns', f'host alias {text(a, "hostname")}.{text(a, "domain")} not translated')
         if u.findall('dnsbl/blocklist') or text(u, 'dnsbl/enabled') == '1':
+            lists = [f'{text(b, "type") or "?"}' + (f' ({text(b, "description")})' if text(b, 'description') else '')
+                     for b in u.findall('dnsbl/blocklist') if text(b, 'enabled', '1') == '1']
             self.note('dns', 'DNS blocklists (Unbound DNSBL) have no VyOS equivalent: point clients at '
-                      'a blocker (AdGuard Home, Pi-hole) or forward to a filtering resolver')
+                      'a blocker (AdGuard Home, Pi-hole; e.g. a VyOS container) or forward to a filtering '
+                      'resolver' + (f'. Enabled lists: {"; ".join(lists)} (hgzNNN = HaGeZi, see '
+                                    'OPNsense\'s blocklists.conf)' if lists else ''))
         # Unbound answers for the firewall's own name with its interface addresses
         host, domain = text(self.x, 'system/hostname'), text(self.x, 'system/domain')
         if text(u, 'general/noregrecords') != '1' and host and domain:
