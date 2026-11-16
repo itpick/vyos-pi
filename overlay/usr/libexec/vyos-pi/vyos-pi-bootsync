@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Keep the Raspberry Pi 5's boot files on the FAT partition in step with VyOS.
+
+The Pi 5 image boots without UEFI or GRUB: the Pi's EEPROM bootloader reads
+config.txt on the FAT partition and loads, from that partition,
+
+  vyos-pi/boot/Image        the kernel (unwrapped from VyOS's EFI zboot vmlinuz)
+  vyos-pi/boot/initrd.img   the initrd
+  bcm2712-rpi-5-b.dtb       the mainline device tree (C1 boards),
+  bcm2712d0-rpi-5-b.dtb     and for D0 boards (2 GB and 16 GB, most late-2024+)
+  cmdline.txt               the kernel command line GRUB would have used
+
+VyOS only knows GRUB: "add system image" and "set system image default-boot"
+change GRUB's default. This copies the default image's files to the FAT
+partition so the Pi boots what GRUB would. vyos-pi-bootsync.service runs it at
+boot and again at shutdown (after an upgrade, the reboot then starts the new
+image). It does nothing unless the FAT partition has a vyos-pi/boot/ folder,
+which only the Pi 5 image has.
+
+  vyos-pi-bootsync [--check]
+      on a running VyOS, as root (--check: report only, exit 1 if out of date)
+  vyos-pi-bootsync --stage DIR --version V --vmlinuz F --initrd F --dtbs DIR
+      at image build time: write the same files into DIR (the ESP's contents)
+"""
+import argparse
+import glob
+import gzip
+import hashlib
+import lzma
+import os
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+BOOT_OPTS_STEM = 'boot=live rootdelay=5 noautologin net.ifnames=0 biosdevname=0 vyos-union=/boot/'
+# Pi 5 debug UART (3-pin header) is ttyAMA10 with the mainline device tree; HDMI
+# is tty1. The last console= is /dev/console (boot messages, emergency shell).
+CONSOLES = 'console=ttyAMA10,115200 console=tty1'
+# mainline file name -> name(s) the Pi 5 firmware looks for
+DTBS = {
+    'bcm2712-rpi-5-b.dtb': ['bcm2712-rpi-5-b.dtb'],
+    'bcm2712-d-rpi-5-b.dtb': ['bcm2712d0-rpi-5-b.dtb', 'bcm2712-d-rpi-5-b.dtb'],
+}
+LOG = '/var/log/vyos-pi.log'
+
+
+def log(msg):
+    print(f'vyos-pi-bootsync: {msg}')
+    try:
+        with open(LOG, 'a') as f:
+            f.write(time.strftime('%Y-%m-%dT%H:%M:%S ') + f'bootsync: {msg}\n')
+    except OSError:
+        pass
+
+
+def kernel_image(data: bytes) -> bytes:
+    """An arm64 Image the Pi firmware can load, from a vmlinuz: EFI zboot
+    (VyOS's CONFIG_EFI_ZBOOT), gzip, or already an Image."""
+    if data[:2] == b'MZ' and data[4:8] == b'zimg':
+        off, size = struct.unpack_from('<II', data, 8)
+        comp = data[24:32].rstrip(b'\0').decode()
+        payload = data[off:off + size]
+        if comp == 'gzip':
+            data = gzip.decompress(payload)
+        elif comp in ('xzkern', 'xz'):
+            data = lzma.decompress(payload)
+        elif comp == 'lzma':
+            data = lzma.decompress(payload, format=lzma.FORMAT_ALONE)
+        elif comp in ('zstd22', 'zstd'):
+            data = subprocess.run(['zstd', '-dc'], input=payload, stdout=subprocess.PIPE, check=True).stdout
+        else:
+            raise SystemExit(f'unsupported zboot compression {comp!r}')
+    elif data[:2] == b'\x1f\x8b':
+        data = gzip.decompress(data)
+    if data[0x38:0x3c] != b'ARM\x64':
+        raise SystemExit('not an arm64 kernel Image')
+    return data
+
+
+def cmdline(version: str, boot_opts: str = '') -> str:
+    """What GRUB passes (BOOT_IMAGE is how VyOS tells which image is running)."""
+    opts = boot_opts or BOOT_OPTS_STEM + version
+    return f'BOOT_IMAGE=/boot/{version}/vmlinuz {opts} {CONSOLES}\n'
+
+
+def stage_files(version, vmlinuz, initrd, dtb_dir, boot_opts=''):
+    """{relative path on the ESP: content}"""
+    files = {
+        'vyos-pi/boot/Image': kernel_image(open(vmlinuz, 'rb').read()),
+        'vyos-pi/boot/initrd.img': open(initrd, 'rb').read(),
+        'vyos-pi/boot/version': f'{version}\n'.encode(),
+        'cmdline.txt': cmdline(version, boot_opts).encode(),
+    }
+    for src, names in DTBS.items():
+        path = os.path.join(dtb_dir, src)
+        if not os.path.exists(path):
+            raise SystemExit(f'missing device tree {path}')
+        for name in names:
+            files[name] = open(path, 'rb').read()
+    return files
+
+
+def write_files(esp, files, check=False):
+    """Write the files that differ; returns the list of changed paths."""
+    changed = []
+    for rel, content in files.items():
+        dst = os.path.join(esp, rel)
+        try:
+            with open(dst, 'rb') as f:
+                same = hashlib.sha256(f.read()).digest() == hashlib.sha256(content).digest()
+        except FileNotFoundError:
+            same = False
+        if same:
+            continue
+        changed.append(rel)
+        if check:
+            continue
+        os.makedirs(os.path.dirname(dst) or esp, exist_ok=True)
+        tmp = dst + '.new'
+        with open(tmp, 'wb') as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, dst)
+    return changed
+
+
+
+def find_esp():
+    out = subprocess.run(['bash', '-c', '. /usr/libexec/vyos-pi/common.sh; find_esp'],
+                         stdout=subprocess.PIPE, text=True).stdout.strip()
+    return out or None
+
+
+def running():
+    from vyos.system import disk, grub, image
+    persist = disk.find_persistence()
+    if not persist:
+        log('no persistence partition (live boot?); nothing to do')
+        return 0
+    version = image.get_default_image() or image.get_running_image()
+    boot_dir = os.path.join(persist, 'boot', version)
+    vmlinuz = os.path.join(boot_dir, 'vmlinuz')
+    initrd = os.path.join(boot_dir, 'initrd.img')
+    if not (os.path.exists(vmlinuz) and os.path.exists(initrd)):
+        log(f'default image {version} has no kernel/initrd in {boot_dir}')
+        return 1
+    boot_opts = grub.get_boot_opts(version, persist)
+
+    esp = find_esp()
+    if not esp:
+        log('no EFI system partition found')
+        return 1
+    with tempfile.TemporaryDirectory(prefix='vyos-pi-bootsync.') as tmp:
+        mnt = os.path.join(tmp, 'esp')
+        os.mkdir(mnt)
+        r = subprocess.run(['findmnt', '-no', 'TARGET', esp], stdout=subprocess.PIPE, text=True)
+        existing = r.stdout.split()[0] if r.returncode == 0 and r.stdout.strip() else None
+        if existing:
+            mnt = existing
+        else:
+            subprocess.run(['mount', '-t', 'vfat', '-o', 'rw,noatime', esp, mnt], check=True)
+        try:
+            if not os.path.isdir(os.path.join(mnt, 'vyos-pi', 'boot')):
+                return 0  # not a direct-boot (Pi 5) image
+            # Device trees ship inside the image's root filesystem (the kernel package).
+            sq = os.path.join(boot_dir, f'{version}.squashfs')
+            sqmnt = os.path.join(tmp, 'sq')
+            os.mkdir(sqmnt)
+            subprocess.run(['mount', '-t', 'squashfs', '-o', 'ro,loop', sq, sqmnt], check=True)
+            try:
+                dtb_dirs = sorted(glob.glob(os.path.join(sqmnt, 'usr/lib/linux-image-*/broadcom')))
+                if not dtb_dirs:
+                    log(f'no device trees in {sq}')
+                    return 1
+                files = stage_files(version, vmlinuz, initrd, dtb_dirs[-1], boot_opts)
+            finally:
+                subprocess.run(['umount', sqmnt])
+            changed = write_files(mnt, files, check=args.check)
+            if changed:
+                verb = 'out of date' if args.check else 'updated'
+                log(f'{verb} for {version}: {" ".join(changed)}')
+                if not args.check:
+                    os.sync()
+                return 1 if args.check else 0
+            print(f'vyos-pi-bootsync: boot files match {version}')
+            return 0
+        finally:
+            if not existing:
+                subprocess.run(['umount', mnt])
+
+
+ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+ap.add_argument('--check', action='store_true')
+ap.add_argument('--stage')
+ap.add_argument('--version')
+ap.add_argument('--vmlinuz')
+ap.add_argument('--initrd')
+ap.add_argument('--dtbs')
+args = ap.parse_args()
+
+if args.stage:
+    files = stage_files(args.version, args.vmlinuz, args.initrd, args.dtbs)
+    for rel in write_files(args.stage, files):
+        print(f'   {rel}')
+    sys.exit(0)
+sys.exit(running())

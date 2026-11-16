@@ -1,0 +1,125 @@
+#!/bin/bash
+# vyos-pi boot hook (vyos-pi-boot.service). Runs at every boot after the local
+# filesystems are up and before vyos-router, which migrates and loads the
+# configuration and names the NICs.
+#
+# Everything is driven by files in vyos-pi/ on the FAT partition (the EFI
+# system partition), so it can be set up from any computer after flashing:
+#
+#   config.boot           installed as /config/config.boot once, then renamed
+#                         to config.boot.applied (the previous config is kept
+#                         in /config/vyos-pi/). VyOS migrates it to its own
+#                         config version when it loads it, so it needs the
+#                         version footer of the image's default config
+#                         (scripts/seed-config.py writes one). NIC names: give
+#                         each "interfaces ethernet ethN" a "hw-id <mac>"
+#                         (see README: VyOS turns those into its slot-based
+#                         name store on this first load).
+#   reboot-after-minutes  a number: reboot that many minutes after every boot.
+#                         A safety net for remote installs; delete it to stop.
+#                         Such trial boots also save diagnostics snapshots
+#                         (vyos-pi-diag) to vyos-pi/diag-*.txt.
+#
+# Also grows the root partition and its filesystem to fill the disk (the image
+# is 3 GiB; the first boot after flashing makes it the size of the card).
+#
+# Logs to /var/log/vyos-pi.log.
+. /usr/libexec/vyos-pi/common.sh
+
+CONFIG_DIR=/opt/vyatta/etc/config   # /config, before vyos-router bind mounts it
+
+# Only an installed system has a persistence partition; a live ISO boot has none.
+if ! grep -q 'vyos-union=' /proc/cmdline; then
+	exit 0
+fi
+
+grow_part() {
+	local part=$1 dev disk num start size total free
+	dev=${part##*/}
+	disk=$(lsblk -no PKNAME "$part" | head -1)
+	[ -n "$disk" ] && [ -r "/sys/class/block/$dev/partition" ] || return 0
+	num=$(cat "/sys/class/block/$dev/partition")
+	start=$(cat "/sys/class/block/$dev/start")
+	size=$(cat "/sys/class/block/$dev/size")
+	total=$(cat "/sys/class/block/$disk/size")
+	# GPT keeps a 33-sector backup at the end of the disk.
+	free=$((total - start - size - 34))
+	[ "$free" -gt $((64 * 2048)) ] || return 0
+	# Only the last partition can grow.
+	if lsblk -lnbo NAME,START "/dev/$disk" 2>/dev/null | awk -v s="$start" 'NR > 1 && $2 > s { found = 1 } END { exit !found }'; then
+		return 0
+	fi
+	log "growing ${part} by $((free / 2048)) MiB to fill /dev/${disk}"
+	sfdisk --relocate gpt-bak-std "/dev/$disk" >/dev/null 2>&1
+	if ! echo ', +' | sfdisk --force --no-reread --no-tell-kernel -N "$num" "/dev/$disk" >/dev/null 2>&1; then
+		log "grow: sfdisk failed"
+		return 0
+	fi
+	# Tell the kernel the new size of the (mounted) partition.
+	partx -u --nr "$num" "/dev/$disk" || log "grow: partx could not resize ${part} in the kernel; it takes effect on the next boot"
+}
+
+# Grow the root partition into free space after it, then its filesystem to the
+# partition (online; a no-op when there is nothing to do, so a grow that
+# needed a reboot to reach the kernel finishes on the next boot).
+grow_root() {
+	local part mnt before after
+	part=$(root_part) || return 0
+	mnt=$(/opt/vyatta/sbin/vyos-persistpath)
+	grow_part "$part"
+	before=$(df -B1M --output=size "$mnt" | tail -1)
+	resize2fs "$part" >/dev/null 2>&1 || return 0
+	after=$(df -B1M --output=size "$mnt" | tail -1)
+	[ "$before" != "$after" ] && log "grow: root filesystem on ${part} grew from${before} to${after} MiB"
+	return 0
+}
+
+seed_config() {
+	local dir=$1 cfg=$CONFIG_DIR/config.boot
+	[ -f "$dir/config.boot" ] || return 0
+	mkdir -p "$CONFIG_DIR/vyos-pi"
+	[ -f "$cfg" ] && cp -p "$cfg" "$CONFIG_DIR/vyos-pi/config.boot.$(date +%Y%m%d-%H%M%S)"
+	if tr -d '\r' < "$dir/config.boot" > "$cfg.vyos-pi" && mv "$cfg.vyos-pi" "$cfg"; then
+		chgrp vyattacfg "$cfg" 2>/dev/null
+		chmod 660 "$cfg"
+		mv "$dir/config.boot" "$dir/config.boot.applied"
+		log "installed config.boot from the FAT partition"
+	else
+		rm -f "$cfg.vyos-pi"
+		log "could not install config.boot from the FAT partition"
+	fi
+}
+
+trial=
+schedule_reboot() {
+	local dir=$1 mins secs
+	[ -f "$dir/reboot-after-minutes" ] || return 0
+	mins=$(tr -cd '0-9' < "$dir/reboot-after-minutes")
+	[ -n "$mins" ] && [ "$mins" -gt 0 ] || return 0
+	trial=1
+	secs=$((mins * 60))
+	log "reboot-after-minutes: rebooting in ${mins} minutes"
+	# Diagnostics snapshots on the ESP: "boot" at the end of this hook,
+	# "running" 3 minutes in (for trials over 5 minutes), "reboot" just before.
+	if [ "$secs" -gt 300 ]; then
+		systemd-run --quiet --unit=vyos-pi-diag-running --on-active=180s \
+			/usr/libexec/vyos-pi/vyos-pi-diag running
+	fi
+	systemd-run --quiet --unit=vyos-pi-trial-reboot --on-active="${secs}s" \
+		/bin/sh -c '/usr/libexec/vyos-pi/vyos-pi-diag reboot; . /usr/libexec/vyos-pi/common.sh; log "reboot-after-minutes: rebooting"; systemctl reboot'
+}
+
+grow_root
+
+if mount_esp; then
+	dir=$ESP_MNT/vyos-pi
+	mkdir -p "$dir"
+	seed_config "$dir"
+	schedule_reboot "$dir"
+	umount_esp
+else
+	log "no EFI system partition found next to $(root_part 2>/dev/null || echo 'the root partition')"
+fi
+
+[ -n "$trial" ] && /usr/libexec/vyos-pi/vyos-pi-diag boot
+exit 0

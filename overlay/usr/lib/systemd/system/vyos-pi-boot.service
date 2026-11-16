@@ -1,0 +1,15 @@
+[Unit]
+Description=vyos-pi first-boot settings from the FAT partition (vyos-pi/)
+Documentation=https://github.com/itpick/vyos-pi#first-boot-settings
+After=local-fs.target
+Before=vyos-router.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/vyos-pi/vyos-pi-boot
+TimeoutStartSec=10min
+StandardOutput=journal+console
+
+[Install]
+WantedBy=vyos.target

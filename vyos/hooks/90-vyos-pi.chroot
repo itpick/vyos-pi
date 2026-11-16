@@ -1,0 +1,45 @@
+#!/bin/sh
+# vyos-pi live-build hook (runs in the image chroot after the packages and
+# overlay/ are in). scripts/build-iso.sh copies it into vyos-build's
+# data/live-build-config/hooks/live/.
+set -e
+
+echo "I: vyos-pi: enabling the boot hook and the Pi 5 boot file sync"
+chmod 755 /usr/libexec/vyos-pi/vyos-pi-boot /usr/libexec/vyos-pi/vyos-pi-diag /usr/libexec/vyos-pi/vyos-pi-bootsync
+systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
+
+# Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
+# images be redistributed when the VyOS branding is replaced; scripts/build-iso.sh
+# swaps the logo artwork, this replaces the product name where a user sees it
+# first: the version line, the login banner and the pre-login issue.
+echo "I: vyos-pi: replacing user-visible branding"
+sed -i 's/^Version:          VyOS {{version}}/Version:          vyos-pi {{version}}/' /usr/libexec/vyos/op_mode/version.py
+grep -q '^Version:          vyos-pi ' /usr/libexec/vyos/op_mode/version.py
+sed -i "s/'issue': 'Welcome to VyOS - /'issue': 'vyos-pi - /" /usr/libexec/vyos/conf_mode/system_login_banner.py
+grep -q "'issue': 'vyos-pi - " /usr/libexec/vyos/conf_mode/system_login_banner.py
+test -f /usr/share/vyos/templates/login/default_motd.j2
+cat > /usr/share/vyos/templates/login/default_motd.j2 <<'MOTD'
+Welcome to vyos-pi {{ version_data.version }} ({{ version_data.release_train }})
+
+An unofficial build of VyOS for the Raspberry Pi 4 and 5, made from VyOS's
+public sources by https://github.com/itpick/vyos-pi. It is not affiliated
+with, endorsed or supported by VyOS Networks (Sentrium S.L.) or Raspberry Pi
+Ltd. VyOS is a registered trademark of Sentrium S.L.
+
+ * vyos-pi:        https://github.com/itpick/vyos-pi
+ * Documentation:  {{ version_data.documentation_url }}
+
+You can change this banner using "set system login banner post-login" command.
+
+This system is free software made of many components; their licences are in
+/usr/share/doc/*/copyright.
+MOTD
+
+echo "I: vyos-pi: recording package versions in /usr/share/vyos-pi/manifest.txt"
+mkdir -p /usr/share/vyos-pi
+{
+	echo "packages:"
+	dpkg-query -W -f '  ${Package} ${Version}\n' 'linux-image-*' vyos-1x accel-ppp-ng jool nat-rtsp vyos-ipt-netflow vyos-linux-firmware grub-efi-arm64-bin 2>/dev/null
+	echo "kernel config (Raspberry Pi options, from kernel/raspberrypi.config):"
+	grep -hE '^CONFIG_(MISC_RP1|MACB|BCMGENET|MMC_SDHCI_BRCMSTB|MMC_SDHCI_IPROC|PCIE_BRCMSTB|BCM2712_MIP)=' /boot/config-* | sed 's/^/  /'
+} >> /usr/share/vyos-pi/manifest.txt

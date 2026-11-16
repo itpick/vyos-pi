@@ -1,0 +1,17 @@
+# vyos-pi, Raspberry Pi 5: the EEPROM bootloader starts VyOS directly, without
+# UEFI or GRUB. vyos-pi-bootsync keeps the kernel, initrd, device trees and
+# cmdline.txt named here in step with VyOS's default image ("add system image",
+# "set system image default-boot"); see vyos-pi/README.txt.
+[pi5]
+arm_64bit=1
+kernel=vyos-pi/boot/Image
+initramfs vyos-pi/boot/initrd.img followkernel
+# Mainline device trees from the VyOS kernel package; the firmware picks
+# bcm2712-rpi-5-b.dtb (C1) or bcm2712d0-rpi-5-b.dtb (D0) by board revision.
+# os_check=0: the firmware's downstream-kernel compatibility check does not
+# apply to a mainline device tree.
+os_check=0
+# Debug UART (3-pin header between the HDMI ports): ttyAMA10, 115200.
+enable_uart=1
+
+[all]

@@ -1,0 +1,123 @@
+name: release
+
+# Push a tag like 2026.11.16-1 to build both images and publish them, with the
+# ISO they were installed from, as a release. The Pages download buttons point
+# at releases/latest, so they follow along. A tag whose release already exists
+# (e.g. one made locally with `make release`) is left alone. Pull requests and
+# manual runs build the same images and keep them as a workflow artifact.
+#
+# Everything runs on a native arm64 runner: the ISO (kernel, out-of-tree
+# modules, live-build) in vyos-build's own container, built from its
+# Dockerfile at VYOS_BUILD_REV; then the per-board images on the runner.
+on:
+  push:
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check for an existing release
+        id: existing
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]] && gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; nothing to do."
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.existing.outputs.skip != 'true'
+      - name: Settings
+        if: steps.existing.outputs.skip != 'true'
+        id: cfg
+        run: |
+          source versions.env
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then version=$GITHUB_REF_NAME; else version=$(date -u +%Y.%m.%d)-ci-${GITHUB_SHA::7}; fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "rev=${VYOS_BUILD_REV:0:12}" >>"$GITHUB_OUTPUT"
+          echo "VYOS_BUILD_REPO=$VYOS_BUILD_REPO" >>"$GITHUB_ENV"
+          echo "VYOS_BUILD_REV=$VYOS_BUILD_REV" >>"$GITHUB_ENV"
+          echo "VYOS_PI_WORK=$RUNNER_TEMP/work" >>"$GITHUB_ENV"
+          # the kernel package cache key (scripts/build-iso.sh hashes the same inputs)
+          key=$({ echo "$VYOS_BUILD_REV $LINUX_SHA256 $KERNEL_PACKAGES"; cat kernel/raspberrypi.config; } | sha256sum | cut -c1-16)
+          echo "kernel_key=$key" >>"$GITHUB_OUTPUT"
+      - name: Free disk space
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af >/dev/null || true
+          df -h /
+      - name: Kernel package cache
+        if: steps.existing.outputs.skip != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/work/kernel-debs/${{ steps.cfg.outputs.kernel_key }}
+          key: kernel-debs-${{ steps.cfg.outputs.kernel_key }}
+      - name: vyos-build at the pinned commit
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          git clone -q "$VYOS_BUILD_REPO" "$RUNNER_TEMP/vyos-build"
+          git -C "$RUNNER_TEMP/vyos-build" checkout -q "$VYOS_BUILD_REV"
+      - uses: docker/setup-buildx-action@v3
+        if: steps.existing.outputs.skip != 'true'
+      - name: Build container (vyos-build docker/, arm64)
+        if: steps.existing.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/vyos-build/docker
+          platforms: linux/arm64
+          load: true
+          tags: vyos-pi-build:${{ steps.cfg.outputs.rev }}
+          cache-from: type=gha,scope=vyos-build-${{ steps.cfg.outputs.rev }}
+          cache-to: type=gha,mode=max,scope=vyos-build-${{ steps.cfg.outputs.rev }}
+      - name: Build ISO and raw image (kernel, modules, live-build)
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          mkdir -p "$VYOS_PI_WORK"
+          scripts/container.sh scripts/build-iso.sh "${{ steps.cfg.outputs.version }}"
+          sudo chown -R "$(id -u):$(id -g)" "$VYOS_PI_WORK/kernel-debs" || true
+          df -h /
+      - name: Install image tools
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y mtools gdisk fdisk xz-utils unzip python3-venv
+          # virt-fw-vars presets the Pi 4 UEFI's variables (scripts/build-image.sh)
+          python3 -m venv "$RUNNER_TEMP/vfw" && "$RUNNER_TEMP/vfw/bin/pip" install -q virt-firmware==25.12 "setuptools<81"  # it imports pkg_resources
+          echo "$RUNNER_TEMP/vfw/bin" >>"$GITHUB_PATH"
+      - name: Build board images
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          scripts/build-image.sh pi5
+          scripts/compress.sh pi5
+          rm -f out/vyos-pi-pi5.img
+          scripts/build-image.sh pi4
+          scripts/compress.sh pi4
+          rm -f out/vyos-pi-pi4.img out/vyos-pi-arm64.raw
+          cat out/vyos-pi-pi5.manifest.txt
+          ls -la out
+      - name: Publish release
+        if: steps.existing.outputs.skip != 'true' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          gh release create "$GITHUB_REF_NAME" out/*.img.xz out/*.img.xz.sha256 out/vyos-pi-arm64.iso out/vyos-pi-arm64.iso.sha256 \
+            out/*.manifest.txt out/vyos-pi.config.boot.default \
+            --title "vyos-pi $GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md
+      - name: Keep images (pull requests, manual runs)
+        if: steps.existing.outputs.skip != 'true' && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: |
+            out/*.img.xz
+            out/*.sha256
+            out/vyos-pi-arm64.iso
+            out/*.manifest.txt
+            out/vyos-pi.config.boot.default
+          retention-days: 3

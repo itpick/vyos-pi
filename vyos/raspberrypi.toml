@@ -1,0 +1,90 @@
+# vyos-pi build flavor: arm64 ISO with the Raspberry Pi kernel, plus a raw disk
+# image installed from it (vyos-build's raw image target). scripts/build-iso.sh
+# copies this file into vyos-build's data/build-flavors/.
+#
+# The overlay/ files (boot hook, ESP sync for the Pi 5, diagnostics) are copied
+# into data/live-build-config/includes.chroot by scripts/build-iso.sh.
+
+image_format = ["iso", "raw"]
+
+# GiB. The root partition grows to fill the card on first boot (vyos-pi-boot).
+disk_size = 3
+
+packages = [
+  "fdisk",
+  "dosfstools",
+  "mtools"
+]
+
+[boot_settings]
+  console_type = "ttyAMA"
+  console_num = '0'
+  console_speed = "115200"
+
+# VyOS's default config with a serial console on ttyAMA0 (the Pi's UART0 under
+# UEFI, and QEMU virt's UART). HDMI gets a login prompt on tty1 either way.
+[[includes_chroot]]
+  path = "usr/share/vyos/config.boot.default"
+  data = '''
+interfaces {
+    loopback lo {
+    }
+}
+service {
+    ntp {
+        allow-client {
+            address "127.0.0.0/8"
+            address "169.254.0.0/16"
+            address "10.0.0.0/8"
+            address "172.16.0.0/12"
+            address "192.168.0.0/16"
+            address "::1/128"
+            address "fe80::/10"
+            address "fc00::/7"
+        }
+        server time1.vyos.net {
+        }
+        server time2.vyos.net {
+        }
+        server time3.vyos.net {
+        }
+    }
+}
+system {
+    config-management {
+        commit-revisions "100"
+    }
+    console {
+        device ttyAMA0 {
+            speed "115200"
+        }
+    }
+    host-name "vyos"
+    login {
+        operator-group default {
+            command-policy {
+                allow "*"
+            }
+        }
+        user vyos {
+            authentication {
+                encrypted-password "$6$QxPS.uk6mfo$9QBSo8u1FkH16gMyAVhus6fU3LOzvLR9Z9.82m3tiHFAxTtIkhaZSWssSgzt4v4dGAL8rhVQxTg0oAG9/q11h/"
+                plaintext-password ""
+            }
+        }
+    }
+    option {
+        reboot-on-upgrade-failure 5
+    }
+    syslog {
+        local {
+            facility all {
+                level "info"
+            }
+            facility local7 {
+                level "debug"
+            }
+        }
+    }
+}
+'''

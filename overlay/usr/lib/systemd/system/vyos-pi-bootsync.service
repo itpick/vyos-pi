@@ -1,0 +1,16 @@
+[Unit]
+Description=vyos-pi: keep the Pi 5's boot files on the FAT partition in step with VyOS's default image
+Documentation=https://github.com/itpick/vyos-pi#pi-5-boot-path
+After=local-fs.target vyos-router.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# At boot (repairs a partition edited elsewhere) and at shutdown (so the
+# reboot after "add system image" starts the new default image).
+ExecStart=/usr/libexec/vyos-pi/vyos-pi-bootsync
+ExecStop=/usr/libexec/vyos-pi/vyos-pi-bootsync
+TimeoutSec=5min
+
+[Install]
+WantedBy=vyos.target

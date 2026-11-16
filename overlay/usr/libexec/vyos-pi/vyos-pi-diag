@@ -1,0 +1,44 @@
+#!/bin/bash
+# vyos-pi-diag STAGE: save a diagnostics snapshot (kernel messages, modules,
+# interfaces, the boot hook's log, VyOS's own view) to the FAT partition as
+# vyos-pi/diag-STAGE.txt.
+#
+# The boot hook runs it on trial boots (reboot-after-minutes): at boot, a few
+# minutes in, and just before the reboot. The FAT partition is readable from
+# any computer, so a remote install that never reaches the network still says
+# why.
+. /usr/libexec/vyos-pi/common.sh
+stage=$(echo "${1:-manual}" | tr -cd 'a-z0-9-')
+
+run() { echo "### $1"; timeout 60 sh -c "$1" 2>&1; echo; }
+tmp=$(mktemp /tmp/vyos-pi-diag.XXXXXX)
+{
+	echo "vyos-pi diagnostics, stage ${stage}: $(date '+%Y-%m-%dT%H:%M:%S%z')"
+	run 'uptime; uname -a; cat /proc/cmdline'
+	run 'tr -d "\0" < /proc/device-tree/model 2>/dev/null; echo; cat /sys/class/dmi/id/product_name 2>/dev/null'
+	run 'head -20 /usr/share/vyos-pi/manifest.txt'
+	run 'cat /var/log/vyos-pi.log'
+	run '/usr/libexec/vyos/op_mode/version.py show 2>/dev/null || cat /usr/share/vyos/version.json'
+	run 'cat /run/vyos-net-name-resolve.json 2>/dev/null; cat /opt/vyatta/etc/config/interface-mapping.json 2>/dev/null'
+	run 'ip -d link'
+	run 'ip addr'
+	run 'ip route; ip -6 route'
+	run 'ss -tulpn'
+	run 'lsmod'
+	run 'lsblk -o NAME,SIZE,TYPE,PARTTYPE,FSTYPE,MOUNTPOINT'
+	run 'lspci -nn 2>/dev/null; ls -l /sys/bus/usb/devices/ 2>/dev/null'
+	run 'systemctl --failed --no-pager'
+	run 'journalctl -b --no-pager -n 300'
+	run 'dmesg'
+} > "$tmp"
+if mount_esp; then
+	mkdir -p "$ESP_MNT/vyos-pi"
+	cp "$tmp" "$ESP_MNT/vyos-pi/diag-${stage}.txt"
+	sync
+	umount_esp
+	rm -f "$tmp"
+else
+	echo "vyos-pi-diag: no EFI partition; snapshot left in $tmp" >&2
+	exit 1
+fi
+exit 0
