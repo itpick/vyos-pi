@@ -5,7 +5,7 @@
 set -e
 
 echo "I: vyos-pi: enabling the boot hook and the Pi 5 boot file sync"
-chmod 755 /usr/libexec/vyos-pi/vyos-pi-boot /usr/libexec/vyos-pi/vyos-pi-diag /usr/libexec/vyos-pi/vyos-pi-bootsync /usr/libexec/vyos-pi/vyos-pi-trial
+chmod 755 /usr/libexec/vyos-pi/*
 systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
 
 # Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
@@ -47,7 +47,7 @@ echo "I: vyos-pi: recording package versions in /usr/share/vyos-pi/manifest.txt"
 mkdir -p /usr/share/vyos-pi
 {
 	echo "packages:"
-	dpkg-query -W -f '  ${Package} ${Version}\n' 'linux-image-*' vyos-1x accel-ppp-ng jool nat-rtsp vyos-ipt-netflow vyos-linux-firmware grub-efi-arm64-bin 2>/dev/null
+	dpkg-query -W -f '  ${Package} ${Version}\n' 'linux-image-*' vyos-1x accel-ppp-ng jool nat-rtsp vyos-ipt-netflow vyos-linux-firmware grub-efi-arm64-bin suricata suricata-update libhtp2 2>/dev/null
 	echo "kernel config (Raspberry Pi options, from kernel/raspberrypi.config):"
 	grep -hE '^CONFIG_(MISC_RP1|MACB|BCMGENET|MMC_SDHCI_BRCMSTB|MMC_SDHCI_IPROC|PCIE_BRCMSTB|BCM2712_MIP)=' /boot/config-* | sed 's/^/  /'
 } >> /usr/share/vyos-pi/manifest.txt

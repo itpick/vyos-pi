@@ -17,6 +17,14 @@
 #                                 the running image.
 #   vm/test.sh trial   [pi5|pi4]  reboot-after-minutes=12: it reboots by itself,
 #                                 with diagnostics saved to the FAT partition
+#   vm/test.sh ids     [pi5|pi4]  Suricata: seed it on the WAN (eth1), fetch ET
+#                                 Open ("update suricata"), and check an alert
+#                                 (sid 2100498, the testmynids.org check) fires
+#                                 for a page served from the WAN side; then
+#                                 IPS mode (vyos-pi-suricata-mode ips, NFQUEUE)
+#                                 with that sid made a drop rule: the LAN
+#                                 client's fetch of the page is blocked while
+#                                 other traffic still flows
 #   vm/test.sh direct  [pi5]      after "image": boot the same disk the way a
 #                                 Pi 5 does (kernel, initrd and cmdline.txt from
 #                                 the FAT partition, no UEFI or GRUB) and check
@@ -70,6 +78,27 @@ wait_ssh() {
   for _ in $(seq "$n"); do vsh true 2>/dev/null && return 0; sleep 5; done
   return 1
 }
+# A web server on the host, reached through slirp's 10.0.2.2 on the WAN side.
+# Serves $dir/www; sets $port and $http_pid.
+www_up() {
+  mkdir -p "$dir/www"
+  port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$dir/www" >"$dir/http.log" 2>&1 &
+  http_pid=$!
+  sleep 2
+}
+# Wait until Suricata has loaded its rules and runs its packet threads,
+# looking at suricata.log after line $1 (suricata_mark gives the count).
+suricata_mark() { vsh 'sudo cat /var/log/suricata/suricata.log 2>/dev/null | wc -l'; }
+suricata_ready() {
+  for _ in $(seq 120); do
+    vsh "sudo tail -n +$(($1 + 1)) /var/log/suricata/suricata.log 2>/dev/null | grep -qiE 'threads are running|engine started'" && return 0
+    sleep 5
+  done
+  vsh 'sudo tail -20 /var/log/suricata/suricata.log' >&2
+  return 1
+}
+
 # Wait for VyOS to finish loading its config: vyos-router's start script has
 # exited (Type=simple + RemainAfterExit: SubState goes running -> exited).
 wait_ready() {
@@ -103,8 +132,9 @@ seed() {
   [[ -f "$dir/id_test" ]] || ssh-keygen -q -t ed25519 -N '' -C vyos-pi-test -f "$dir/id_test"
   python3 "$root/scripts/seed-config.py" "$root/out/vyos-pi.config.boot.default" "$dir/config.boot" \
     --hostname vyos-pi-test --ssh-key "$dir/id_test.pub" \
-    --lan "eth0=$LAN_MAC" --wan "eth1=$WAN_MAC" --mgmt "eth2=$MGMT_MAC"
+    --lan "eth0=$LAN_MAC" --wan "eth1=$WAN_MAC" --mgmt "eth2=$MGMT_MAC" "${SEED_ARGS[@]}"
 }
+SEED_ARGS=()
 
 # LAN client console: client_sh TIMEOUT 'command' (logs in first)
 C() { python3 -I "$root/vm/console.py" "$dir/client.sock" "$@"; }
@@ -180,6 +210,8 @@ case "$test" in
     vsh "for m in $mods; do sudo modprobe \$m || exit 1; done; lsmod | grep -E '^(${mods// /|}) '" \
       || fail "Pi Ethernet drivers or the rebuilt out-of-tree modules do not load (signature/symbol mismatch?)"
     ok "Pi Ethernet drivers (macb, genet) and the rebuilt out-of-tree modules (ipt_NETFLOW, jool, nf_nat_rtsp, accel-ppp's ipoe/vlan_mon) load"
+    vsh '! systemctl is-active -q suricata' || fail "Suricata runs without being configured (it should be off by default)"
+    ok "Suricata installed ($(vsh 'suricata -V | grep -oE "[0-9]+\.[0-9.]+"')) and off by default"
     vsh 'systemctl is-active getty@tty1' || fail "no login prompt on tty1 (HDMI)"
     ok "login prompt on tty1 (what HDMI shows)"
     if [[ $profile == pi5 ]]; then
@@ -202,11 +234,8 @@ case "$test" in
     ok "LAN client resolves names through VyOS's DNS forwarder"
     # A web server on the host, reached through slirp's 10.0.2.2 on the WAN side.
     token=vyos-pi-nat-$RANDOM$RANDOM
-    mkdir -p "$dir/www" && echo "$token" >"$dir/www/token"
-    port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
-    python3 -m http.server "$port" --bind 127.0.0.1 --directory "$dir/www" >"$dir/http.log" 2>&1 &
-    http_pid=$!
-    sleep 2
+    www_up
+    echo "$token" >"$dir/www/token"
     got=$(client_sh 60 "wget -q -O - http://10.0.2.2:$port/token")
     [[ "$got" == *"$token"* ]] || fail "LAN client could not fetch a page from the WAN side (got: $got)"
     ct=$(vsh "sudo conntrack -L -p tcp --dport $port 2>/dev/null")
@@ -232,6 +261,58 @@ case "$test" in
     vsh 'sudo bash -c ". /usr/libexec/vyos-pi/common.sh; mount_esp; d=\$ESP_MNT/vyos-pi; ls -l \$d; grep -q \"stage boot\" \$d/diag-boot.txt && grep -q \"stage reboot\" \$d/diag-reboot.txt && grep -q \"^### ip addr\" \$d/diag-reboot.txt; r=\$?; umount_esp; exit \$r"' \
       || fail "diagnostics snapshots missing from the FAT partition"
     ok "diagnostics saved to the FAT partition (diag-boot.txt, diag-reboot.txt)"
+    ;;
+  ids)
+    SEED_ARGS=(--ids eth1)
+    boot_seeded
+    wait_ready || fail "vyos-router never became active"
+    vsh 'systemctl is-active suricata' || fail "service suricata configured, but suricata is not running"
+    ok "Suricata $(vsh 'suricata -V | grep -oE "[0-9]+\.[0-9.]+"') runs on eth1 (af-packet, from the seeded service suricata)"
+    m0=$(suricata_mark)
+    op 'update suricata' 2>&1 | tail -5
+    vsh 'test -s /var/lib/suricata/rules/suricata.rules' || vsh 'sudo /usr/libexec/vyos/op_mode/update_suricata.sh' 2>&1 | tail -5
+    rules=$(vsh 'grep -c "^alert" /var/lib/suricata/rules/suricata.rules')
+    vsh 'grep -q "sid:2100498;" /var/lib/suricata/rules/suricata.rules' || fail "update suricata did not fetch ET Open (sid 2100498 missing)"
+    ok "update suricata fetched ET Open: $rules alert rules"
+    suricata_ready "$m0" || fail "Suricata never finished loading the rules"
+    vsh 'sudo grep -E "rules successfully loaded|signatures processed" /var/log/suricata/suricata.log | tail -2'
+    # testmynids.org serves "uid=0(root) gid=0(root) groups=0(root)"; same page, locally
+    www_up
+    mkdir -p "$dir/www/uid" && echo 'uid=0(root) gid=0(root) groups=0(root)' >"$dir/www/uid/index.html"
+    echo ok >"$dir/www/ok.txt"
+    vsh "curl -s http://10.0.2.2:$port/uid/index.html"
+    vsh 'curl -s -m 15 http://testmynids.org/uid/index.html' || true
+    for _ in $(seq 24); do
+      vsh 'sudo grep -q "\"signature_id\":2100498" /var/log/suricata/eve.json' && break
+      sleep 5
+    done
+    vsh 'sudo grep "\"signature_id\":2100498" /var/log/suricata/eve.json | tail -1' | tee "$dir/ids-alert.json"
+    [[ -s "$dir/ids-alert.json" ]] || fail "no Suricata alert for the id check (sid 2100498)"
+    ok "IDS: alert 2100498 \"GPL ATTACK_RESPONSE id check returned root\" in eve.json"
+
+    # IPS: make that sid a drop rule, put Suricata on NFQUEUE
+    vsh 'echo 2100498 | sudo tee /etc/suricata/drop.conf >/dev/null && sudo /usr/libexec/vyos/op_mode/update_suricata.sh >/dev/null 2>&1; grep -E "^drop .*sid:2100498;" /var/lib/suricata/rules/suricata.rules | cut -c1-90' \
+      || fail "drop.conf did not turn sid 2100498 into a drop rule"
+    m0=$(suricata_mark)
+    vsh 'sudo /usr/libexec/vyos-pi/vyos-pi-suricata-mode ips'
+    suricata_ready "$m0" || fail "Suricata (IPS) never finished loading"
+    vsh 'sudo nft list table inet vyos_pi_ips' | tee "$dir/ips-nft.txt"
+    grep -q 'queue .*num 0 bypass\|queue flags bypass to 0\|queue to 0 bypass\|bypass' "$dir/ips-nft.txt" || fail "no NFQUEUE rule in inet vyos_pi_ips"
+    "$root/vm/client.sh" "$profile"
+    client_login || fail "LAN client never reached a shell"
+    client_sh 90 'ip link set eth0 up; udhcpc -i eth0 -n -q -t 10' | tail -1
+    got=$(client_sh 60 "wget -q -T 10 -O - http://10.0.2.2:$port/ok.txt")
+    [[ "$got" == *ok* ]] || fail "IPS mode: the LAN client cannot reach the WAN side at all (got: $got)"
+    got=$(client_sh 60 "wget -q -T 15 -O - http://10.0.2.2:$port/uid/index.html; echo rc=\$?")
+    echo "$got"
+    [[ "$got" != *"uid=0(root)"* ]] || fail "IPS mode: the id check page reached the LAN client"
+    for _ in $(seq 12); do
+      vsh 'sudo grep "\"signature_id\":2100498" /var/log/suricata/eve.json | grep -q "\"action\":\"blocked\""' && break
+      sleep 5
+    done
+    vsh 'sudo grep "\"signature_id\":2100498" /var/log/suricata/eve.json | grep "\"action\":\"blocked\"" | tail -1' | tee "$dir/ips-drop.json"
+    [[ -s "$dir/ips-drop.json" ]] || fail "no blocked event for sid 2100498 in eve.json"
+    ok "IPS: the LAN client's fetch of the id check page was dropped (eve.json action blocked); other traffic flows"
     ;;
   direct)
     [[ $profile == pi5 ]] || fail "direct boot is the Pi 5 path"
@@ -287,6 +368,6 @@ case "$test" in
       ok "direct boot (as on a Pi 5) starts the upgraded image $new"
     fi
     ;;
-  *) echo "usage: $0 image|trial|direct|upgrade [pi5|pi4] [ISO]" >&2; exit 2 ;;
+  *) echo "usage: $0 image|trial|ids|direct|upgrade [pi5|pi4] [ISO]" >&2; exit 2 ;;
 esac
 stop

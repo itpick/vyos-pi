@@ -5,6 +5,7 @@ or vyos-pi/config.boot.default on the image's FAT partition).
   scripts/seed-config.py DEFAULT OUT [--hostname NAME] [--ssh-key FILE]
       [--password-hash HASH] [--wan IF[=MAC]] [--lan IF[=MAC]] [--mgmt IF[=MAC]]
       [--lan-address 192.168.1.1/24] [--dhcp-range 100-199] [--domain lan]
+      [--ids IF[,IF...]]
 
 --ssh-key     enable SSH for user vyos with the public key(s) in FILE (key only:
               password login over SSH is turned off when a key is given)
@@ -15,6 +16,12 @@ or vyos-pi/config.boot.default on the image's FAT partition).
                  forwarder, SSH, routed to the WAN
 --mgmt IF[=MAC]  management port: DHCP client, SSH and ping allowed in, not
                  routed (the VM tests reach the router this way)
+
+--ids IF,...     Suricata on those interfaces (IDS: af-packet capture, alerts
+                 in /var/log/suricata/eve.json), with the address and port
+                 groups the ET Open rules use (HOME_NET = the LAN, or RFC 1918
+                 without --lan). Fetch the rules once it is up: "update
+                 suricata". Off unless given. IPS mode: see the README.
 
 With --lan and --wan this is a small home router: stateful firewall (forward:
 LAN -> anywhere; input: LAN, management, ping and loopback), source NAT, Kea
@@ -112,6 +119,7 @@ ap.add_argument('--mgmt', type=nic)
 ap.add_argument('--lan-address', default='192.168.1.1/24')
 ap.add_argument('--dhcp-range', default='100-199')
 ap.add_argument('--domain', default='lan')
+ap.add_argument('--ids', type=lambda v: [nic(x)[0] for x in v.split(',')])
 a = ap.parse_args()
 
 cfg, footer = parse(open(a.default).read())
@@ -231,6 +239,29 @@ if a.lan and a.wan:
     leaf(rule, ['source', 'address'], str(ipaddress.ip_interface(a.lan_address).network))
     leaf(rule, ['translation', 'address'], 'masquerade')
     leaf(rule, ['description'], 'LAN to the internet')
+
+if a.ids:
+    sur = at(cfg, 'service', 'suricata')
+    leaf(sur, ['interface'], *a.ids)
+    home = [str(ipaddress.ip_interface(a.lan_address).network)] if a.lan else \
+        ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']
+    leaf(sur, ['address-group home-net', 'address'], *home)
+    leaf(sur, ['address-group external-net', 'group'], '!home-net')
+    # the server/client groups ET Open references, all the home network
+    for g in ('http-servers', 'smtp-servers', 'sql-servers', 'dns-servers', 'telnet-servers',
+              'aim-servers', 'dc-servers', 'dnp3-server', 'dnp3-client', 'modbus-client',
+              'modbus-server', 'enip-client', 'enip-server'):
+        leaf(sur, [f'address-group {g}', 'group'], 'home-net')
+    ports = {'http-ports': ['80'], 'oracle-ports': ['1521'], 'ssh-ports': ['22'],
+             'dnp3-ports': ['20000'], 'modbus-ports': ['502'], 'ftp-ports': ['21'],
+             'geneve-ports': ['6081'], 'vxlan-ports': ['4789'], 'teredo-ports': ['3544']}
+    for g, p in ports.items():
+        leaf(sur, [f'port-group {g}', 'port'], *p)
+    leaf(sur, ['port-group shellcode-ports', 'group'], '!http-ports')
+    leaf(sur, ['port-group file-data-ports', 'group'], 'http-ports')
+    leaf(sur, ['port-group file-data-ports', 'port'], '110', '143')
+    leaf(sur, ['log', 'eve', 'filename'], 'eve.json')
+    leaf(sur, ['log', 'eve', 'type'], 'alert', 'drop', 'anomaly', 'http', 'dns', 'tls')
 
 if pinned:
     m = re.search(r'interfaces@(\d+)', footer)

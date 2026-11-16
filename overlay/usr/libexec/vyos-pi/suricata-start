@@ -1,0 +1,54 @@
+#!/bin/bash
+# Suricata's ExecStart on vyos-pi (suricata.service.d/20-vyos-pi.conf).
+#
+# VyOS's "service suricata" writes /run/suricata/suricata.yaml and runs
+# Suricata in IDS mode: af-packet capture on the interfaces under
+# "service suricata interface", alerts only. /config/vyos-pi/suricata.conf
+# (vyos-pi-suricata-mode writes it) can switch it to IPS mode instead:
+#
+#   MODE=ids|ips    ids (default): af-packet, as VyOS does it
+#                   ips: every packet the router forwards (all interfaces)
+#                   goes through NFQUEUE to Suricata, so "drop" rules drop
+#   QUEUE=0         the NFQUEUE number
+#   FAIL=open|closed  open (default): if Suricata is not running, forwarded
+#                   traffic passes uninspected (nft "bypass"); closed: it is
+#                   dropped
+#
+# In IPS mode the queue lives in its own nftables table (inet vyos_pi_ips,
+# forward hook at priority filter - 10), ahead of VyOS's firewall, which
+# still sees every packet Suricata accepts. "stop" removes the table.
+CONF=/config/vyos-pi/suricata.conf
+MODE=ids QUEUE=0 FAIL=open
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"
+QUEUE=$(tr -cd '0-9' <<<"$QUEUE"); QUEUE=${QUEUE:-0}
+args=(-D -c /run/suricata/suricata.yaml --pidfile /run/suricata/suricata.pid)
+
+case "${1:-}" in
+start)
+	if [ "$MODE" = ips ]; then
+		bypass=bypass
+		[ "$FAIL" = closed ] && bypass=
+		nft -f - <<NFT
+table inet vyos_pi_ips
+delete table inet vyos_pi_ips
+table inet vyos_pi_ips {
+	chain forward {
+		type filter hook forward priority filter - 10; policy accept;
+		queue num $QUEUE $bypass
+	}
+}
+NFT
+		exec /usr/bin/suricata "${args[@]}" -q "$QUEUE"
+	fi
+	nft delete table inet vyos_pi_ips 2>/dev/null
+	exec /usr/bin/suricata "${args[@]}" --af-packet
+	;;
+stop)
+	# fail-closed must not outlive Suricata on purpose: a stopped service
+	# (as opposed to a crashed one) lets traffic through again
+	nft delete table inet vyos_pi_ips 2>/dev/null
+	exit 0
+	;;
+*) echo "usage: $0 start|stop" >&2; exit 2 ;;
+esac
