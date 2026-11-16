@@ -99,14 +99,11 @@ schedule_reboot() {
 	trial=1
 	secs=$((mins * 60))
 	log "reboot-after-minutes: rebooting in ${mins} minutes"
-	# Diagnostics snapshots on the ESP: "boot" at the end of this hook,
-	# "running" 3 minutes in (for trials over 5 minutes), "reboot" just before.
-	if [ "$secs" -gt 300 ]; then
-		systemd-run --quiet --unit=vyos-pi-diag-running --on-active=180s \
-			/usr/libexec/vyos-pi/vyos-pi-diag running
-	fi
-	systemd-run --quiet --unit=vyos-pi-trial-reboot --on-active="${secs}s" \
-		/bin/sh -c '/usr/libexec/vyos-pi/vyos-pi-diag reboot; . /usr/libexec/vyos-pi/common.sh; log "reboot-after-minutes: rebooting"; systemctl reboot'
+	# vyos-pi-trial: diagnostics 3 minutes in (for trials over 5 minutes) and
+	# just before the reboot; "boot" is taken at the end of this hook.
+	mkdir -p /run/vyos-pi
+	echo "TRIAL_SECONDS=${secs}" > /run/vyos-pi/trial.env
+	systemctl start --no-block vyos-pi-trial.service
 }
 
 grow_root

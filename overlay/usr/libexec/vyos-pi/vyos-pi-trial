@@ -1,0 +1,19 @@
+#!/bin/bash
+# vyos-pi-trial SECONDS: the reboot-after-minutes timer (vyos-pi-trial.service,
+# started by the boot hook). Saves diagnostics to the FAT partition 3 minutes
+# in (when the trial is longer than 5 minutes) and just before rebooting.
+# A plain service rather than a transient systemd-run timer: VyOS's boot
+# clears transient units under /run/systemd/transient.
+. /usr/libexec/vyos-pi/common.sh
+secs=$(tr -cd '0-9' <<<"${1:-}")
+[ -n "$secs" ] && [ "$secs" -gt 0 ] || { echo "usage: $0 SECONDS" >&2; exit 2; }
+first=0
+if [ "$secs" -gt 300 ]; then
+	first=180
+	sleep "$first"
+	/usr/libexec/vyos-pi/vyos-pi-diag running
+fi
+sleep $((secs - first))
+/usr/libexec/vyos-pi/vyos-pi-diag reboot
+log "reboot-after-minutes: rebooting"
+systemctl reboot

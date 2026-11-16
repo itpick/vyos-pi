@@ -76,7 +76,13 @@ if (( direct )); then
   # What the Pi 5 firmware reads, from the FAT partition of the current disk.
   # The GPT and the 256 MiB ESP sit in the first 300 MiB.
   qemu-img dd -f qcow2 -O raw bs=1M count=300 if="$DISK" of=disk.raw.tmp
-  off=$(sfdisk -J disk.raw.tmp | python3 -c 'import json,sys; print(json.load(sys.stdin)["partitiontable"]["partitions"][0]["start"] * 512)')
+  # partition 1's start, from the primary GPT (the backup is not in the copy)
+  off=$(python3 -c '
+import struct, sys
+d = open(sys.argv[1], "rb").read(64 * 1024)
+assert d[512:520] == b"EFI PART", "no GPT"
+lba = struct.unpack_from("<Q", d, 512 + 72)[0]
+print(struct.unpack_from("<Q", d, lba * 512 + 32)[0] * 512)' disk.raw.tmp)
   rm -f Image initrd.img cmdline.txt
   for f in vyos-pi/boot/Image vyos-pi/boot/initrd.img cmdline.txt; do
     MTOOLS_SKIP_CHECK=1 mcopy -n -i "disk.raw.tmp@@$off" "::/$f" "${f##*/}"

@@ -5,7 +5,7 @@
 set -e
 
 echo "I: vyos-pi: enabling the boot hook and the Pi 5 boot file sync"
-chmod 755 /usr/libexec/vyos-pi/vyos-pi-boot /usr/libexec/vyos-pi/vyos-pi-diag /usr/libexec/vyos-pi/vyos-pi-bootsync
+chmod 755 /usr/libexec/vyos-pi/vyos-pi-boot /usr/libexec/vyos-pi/vyos-pi-diag /usr/libexec/vyos-pi/vyos-pi-bootsync /usr/libexec/vyos-pi/vyos-pi-trial
 systemctl enable vyos-pi-boot.service vyos-pi-bootsync.service
 
 # Branding. VyOS's artwork licence (vyos-build LICENSE.artwork) lets self-built
