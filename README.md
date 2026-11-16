@@ -210,7 +210,26 @@ Every boot is logged to `.work/vm/<profile>/console.log` (`VYOS_PI_VM_DIR`
 moves `.work/vm`). Attach to a headless VM's console:
 `socat -,raw,echo=0,escape=0x1d UNIX-CONNECT:.work/vm/pi5/console.sock` (Ctrl-] detaches).
 
-TEST_RESULTS_PLACEHOLDER
+Last runs (nixtop: x86_64 host, aarch64 under TCG; local builds 2026.11.16-dev1 to -dev3, the same pipeline as CI):
+
+| Check | Pi 4 profile | Pi 5 profile |
+|---|---|---|
+| Boot through QEMU's UEFI and VyOS's GRUB to a loaded config | pass (~6 min) | pass (~6 min) |
+| Seed `config.boot` from the FAT partition: hostname, SSH key | pass | pass |
+| eth0/eth1/eth2 follow the seed's `hw-id`s, not PCI order (VyOS's `interface-mapping.json`) | pass | pass |
+| Root grows from 3 to 32 GiB on first boot | pass | pass |
+| `show version`: vyos-pi, flavor raspberrypi; running kernel has the Pi options | pass | pass |
+| `macb`, `genet` and the rebuilt out-of-tree modules load (signed, symbol versions match) | pass | pass |
+| Login prompt on tty1 (HDMI) | pass | pass |
+| LAN client: DHCP lease from Kea, DNS through the forwarder, HTTP to the WAN side through SNAT (conntrack `src=192.168.1.100 … dst=10.0.2.15`) | pass | pass |
+| `reboot-after-minutes` reboots by itself (12 min), diagnostics on the FAT partition | pass | pass |
+| Direct boot, as on a Pi 5: kernel, initrd and `cmdline.txt` from the FAT partition, no UEFI/GRUB | n/a | pass |
+| `add system image` of another vyos-pi ISO, reboot into it with the config, FAT boot files follow, direct boot starts it | not run | pass (dev1 → dev2) |
+
+
+A boot takes about 6 minutes under TCG, so `reboot-after-minutes` is tested
+with 12. Once, QEMU's UEFI spun before reaching GRUB; the tests restart a VM
+that has not started a kernel after 8 minutes.
 
 What the VM can and can't tell you:
 

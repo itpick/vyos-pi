@@ -47,8 +47,8 @@ commit=${COMMIT:-$(git -c safe.directory='*' -C "$repo" rev-parse --short HEAD 2
 
 step "vyos-build ${VYOS_BUILD_REV:0:12}"
 vb=$work/vyos-build
-# EXPORT_ONLY=1: skip the build and export what the last one left in vyos-build/build
-if [ -z "${EXPORT_ONLY:-}" ]; then
+# REUSE_ISO=1: keep the last build's ISO, redo only the raw image and the export
+if [ -z "${REUSE_ISO:-}" ]; then
 [ -d "$vb/.git" ] || git clone -q "$VYOS_BUILD_REPO" "$vb"
 git -C "$vb" cat-file -e "$VYOS_BUILD_REV^{commit}" 2>/dev/null || git -C "$vb" fetch -q origin
 git -C "$vb" checkout -q --force "$VYOS_BUILD_REV"
@@ -118,45 +118,52 @@ for p in pathlib.Path(sys.argv[1], 'data').rglob('*.png'):
     p.write_bytes(png(640, 480, (28, 25, 23)))
     print(f'   replaced artwork {p.relative_to(sys.argv[1])}')
 EOF
+fi
 cd "$vb"
+git -C "$vb" checkout -q -- scripts/image-build/raw_image.py
+python3 "$repo/scripts/patch-vyos-build.py" "$vb"
 # Undo the raw image step's loop devices and mounts (it can leave some behind).
 raw_cleanup() {
+	local m l
 	for m in build/tmp/squash/dev build/tmp/squash/proc build/tmp/squash/sys build/tmp/squash/boot/efi \
 		build/tmp/squash/boot build/tmp/squash build/tmp/iso build/tmp/raw build/tmp/efi; do
 		mountpoint -q "$m" && umount -l "$m"
 	done
 	for l in $(losetup -j "$vb/build/vyos-$version-raspberrypi-arm64.raw" -O NAME -n 2>/dev/null); do
-		kpartx -d "$l" 2>/dev/null; losetup -d "$l" 2>/dev/null
+		losetup -d "$l" 2>/dev/null
 	done
 	return 0
 }
 opts=(--architecture arm64 --build-by "vyos-pi@github.com/itpick/vyos-pi" --version "$version"
 	--build-comment "vyos-pi $commit: Raspberry Pi 4/5 kernel (kernel/raspberrypi.config)")
-if ! ./build-vyos-image "${opts[@]}" raspberrypi; then
-	# The raw image step (loop devices, kpartx) sometimes fails to mount the
-	# fresh root partition right after live-build; once the ISO exists, retry
-	# only that step.
-	[ -f "build/vyos-$version-raspberrypi-arm64.iso" ] || die "ISO build failed"
-	echo "W: raw image step failed; retrying it from the ISO"
+raw_only() {
 	raw_cleanup
 	rm -f "build/vyos-$version-raspberrypi-arm64.raw"
 	./build-vyos-image "${opts[@]}" --reuse-iso "vyos-$version-raspberrypi-arm64.iso" raspberrypi || die "raw image build failed"
+}
+if [ -n "${REUSE_ISO:-}" ]; then
+	[ -f "build/vyos-$version-raspberrypi-arm64.iso" ] || die "REUSE_ISO: no build/vyos-$version-raspberrypi-arm64.iso"
+	step "raw image from the existing ISO"
+	raw_only
+elif ! ./build-vyos-image "${opts[@]}" raspberrypi; then
+	# The raw image step has failed to mount its fresh root partition right
+	# after live-build; once the ISO exists, retry only that step.
+	[ -f "build/vyos-$version-raspberrypi-arm64.iso" ] || die "ISO build failed"
+	echo "W: raw image step failed; retrying it from the ISO"
+	raw_only
 fi
 raw_cleanup
-else
-	cd "$vb"
-fi
 iso=build/vyos-$version-raspberrypi-arm64.iso
 raw=build/vyos-$version-raspberrypi-arm64.raw
 [ -f "$iso" ] || die "no ISO built"
-[ -f "$raw" ] || [ -n "${EXPORT_ONLY:-}" -a -f "$out/vyos-pi-arm64.raw" ] || die "no raw image built"
+[ -f "$raw" ] || die "no raw image built"
 
 step "exporting to out/"
 rm -rf "${out:?}/boot"
 mkdir -p "$out/boot/dtbs"
 cp "$iso" "$out/vyos-pi-arm64.iso"
 # (plain copy: some bind mounts, e.g. macOS virtiofs, reject sparse writes)
-if [ -f "$raw" ]; then cp --sparse=never "$raw" "$out/vyos-pi-arm64.raw" && rm -f "$raw"; fi
+cp --sparse=never "$raw" "$out/vyos-pi-arm64.raw" && rm -f "$raw"
 (cd "$out" && sha256sum vyos-pi-arm64.iso > vyos-pi-arm64.iso.sha256)
 x=$(mktemp -d)
 trap 'umount "$x/sq" 2>/dev/null; rm -rf "$x"' EXIT

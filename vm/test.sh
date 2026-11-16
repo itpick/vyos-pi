@@ -15,7 +15,7 @@
 #                                 source NAT (seen in conntrack). pi5: the
 #                                 direct-boot files on the FAT partition match
 #                                 the running image.
-#   vm/test.sh trial   [pi5|pi4]  reboot-after-minutes=3: it reboots by itself,
+#   vm/test.sh trial   [pi5|pi4]  reboot-after-minutes=12: it reboots by itself,
 #                                 with diagnostics saved to the FAT partition
 #   vm/test.sh direct  [pi5]      after "image": boot the same disk the way a
 #                                 Pi 5 does (kernel, initrd and cmdline.txt from
@@ -42,20 +42,29 @@ WAN_MAC=52:54:00:57:41:$mac LAN_MAC=52:54:00:4c:41:$mac MGMT_MAC=52:54:00:4d:47:
 mkdir -p "$dir"
 
 stop() {
-  [[ -f "$dir/qemu.pid" ]] && kill "$(cat "$dir/qemu.pid")" 2>/dev/null || true
+  local pid
+  if [[ -f "$dir/qemu.pid" ]] && pid=$(cat "$dir/qemu.pid") && kill "$pid" 2>/dev/null; then
+    for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+  fi
   "$root/vm/client.sh" "$profile" stop 2>/dev/null || true
   [[ -n "${http_pid:-}" ]] && kill "$http_pid" 2>/dev/null || true
   sleep 2
 }
 ok() { echo "PASS: $*"; }
-fail() { echo "FAIL: $*" >&2; [[ -f "$dir/console.log" ]] && tail -c 3000 "$dir/console.log" | tr -d '\r' >&2; stop; exit 1; }
+# KEEP=1: leave the VMs running after a failure, to look around
+fail() {
+  echo "FAIL: $*" >&2
+  [[ -f "$dir/console.log" ]] && tail -c 3000 "$dir/console.log" | tr -d '\r' | sed 's/^/console: /' >&2
+  [[ -n "${KEEP:-}" ]] || stop
+  exit 1
+}
 
 # Run a shell script as vyos over SSH (MGMT port). vsh 'cmd' / op 'show ...'
 vsh() {
   ssh -q -i "$dir/id_test" -p "$ssh" -o BatchMode=yes -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 vyos@127.0.0.1 /bin/bash -s <<<"$1"
 }
-op() { vsh "/bin/vbash -c 'source /opt/vyatta/etc/functions/script-template; run $1'"; }
+op() { vsh "/opt/vyatta/bin/vyatta-op-cmd-wrapper $1"; }
 wait_ssh() {
   local n=${1:-240}
   for _ in $(seq "$n"); do vsh true 2>/dev/null && return 0; sleep 5; done
@@ -101,29 +110,46 @@ seed() {
 C() { python3 -I "$root/vm/console.py" "$dir/client.sock" "$@"; }
 client_login() {
   for _ in $(seq 60); do
-    case "$(tail -c 200 "$dir/client.log" 2>/dev/null | tr -d '\r')" in
-      *"login: ") C 20 'Password: ' cirros >/dev/null || true ;;
-      *"Password: ") C 30 '\$ $' gocubsgo >/dev/null || true ;;
-      *'$ ') return 0 ;;
-      *) C 5 'login: $' '' >/dev/null || true; sleep 5 ;;
+    case "$(tail -c 200 "$dir/client.log" 2>/dev/null | tr -d '\r' | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g')" in
+      *"login: ") C 30 '# $' root >/dev/null || true ;;
+      *'# ') return 0 ;;
+      *) sleep 5 ;;
     esac
   done
   return 1
 }
-client_sh() { C "$1" '__END__\r?\n.*\$ ' "$2; echo __EN''D__" | tr -d '\r' | sed -n '1d; /^__END__$/q; p'; }
+client_sh() { C "$1" '__END__\r?\n.*# ' "$2; echo __EN''D__" | tr -d '\r' | sed -n '1d; /^__END__$/q; p'; }
+
+# Start the VM; if no kernel starts within 8 minutes, start it once more
+# (QEMU's UEFI under TCG has been seen to spin forever before GRUB).
+start_vm() {
+  local n0 attempt
+  for attempt in 1 2; do
+    n0=$(grep -ac 'Booting Linux' "$dir/console.log" 2>/dev/null || true)
+    "$root/vm/run.sh" "--$profile" --headless "$@"
+    for _ in $(seq 96); do
+      (( $(grep -ac 'Booting Linux' "$dir/console.log" 2>/dev/null || echo 0) > ${n0:-0} )) && return 0
+      sleep 5
+    done
+    echo "W: no kernel within 8 minutes (attempt $attempt); restarting the VM"
+    stop
+  done
+  return 1
+}
 
 boot_seeded() {
   seed
   local img
   img=$(test_image "config.boot=$dir/config.boot" "$@")
-  "$root/vm/run.sh" "--$profile" --headless --reset --image "$img"
+  start_vm --reset --image "$img" || fail "the VM never started a kernel"
   wait_ssh || fail "SSH with the seeded key never worked (seed not applied, or MGMT not eth2?)"
 }
 
-stop
+[[ -n "${REUSE_VM:-}" ]] || stop
 case "$test" in
   image)
-    boot_seeded
+    # REUSE_VM=1: run the checks against the VM a previous run left up
+    if [[ -n "${REUSE_VM:-}" ]]; then wait_ssh 2 || fail "REUSE_VM: no VM answers on ssh"; else boot_seeded; fi
     ok "SSH as vyos with the key from the seeded config.boot (MGMT port)"
     wait_ready || fail "vyos-router never became active"
     [[ "$(vsh hostname)" == vyos-pi-test ]] || fail "hostname is $(vsh hostname), not the seeded one"
@@ -150,9 +176,10 @@ case "$test" in
     vsh 'grep -E "^CONFIG_(MISC_RP1|MACB|BCMGENET|MMC_SDHCI_BRCMSTB|MMC_SDHCI_IPROC|BCM2712_MIP)=" /boot/config-$(uname -r)' | tee "$dir/kconfig.txt"
     [[ $(wc -l <"$dir/kconfig.txt") -eq 6 ]] || fail "running kernel lacks the Raspberry Pi options"
     ok "show version reports vyos-pi (flavor raspberrypi), running the Pi kernel ($(vsh 'uname -r'))"
-    vsh 'sudo modprobe macb && sudo modprobe bcmgenet && sudo modprobe ipt_NETFLOW && sudo modprobe jool && lsmod | grep -E "^(macb|genet|bcmgenet|ipt_NETFLOW|jool) "' \
+    mods="macb genet ipt_NETFLOW jool nf_nat_rtsp ipoe vlan_mon"
+    vsh "for m in $mods; do sudo modprobe \$m || exit 1; done; lsmod | grep -E '^(${mods// /|}) '" \
       || fail "Pi Ethernet drivers or the rebuilt out-of-tree modules do not load (signature/symbol mismatch?)"
-    ok "Pi Ethernet drivers (macb, bcmgenet) and rebuilt out-of-tree modules (ipt_NETFLOW, jool) load"
+    ok "Pi Ethernet drivers (macb, genet) and the rebuilt out-of-tree modules (ipt_NETFLOW, jool, nf_nat_rtsp, accel-ppp's ipoe/vlan_mon) load"
     vsh 'systemctl is-active getty@tty1' || fail "no login prompt on tty1 (HDMI)"
     ok "login prompt on tty1 (what HDMI shows)"
     if [[ $profile == pi5 ]]; then
@@ -163,12 +190,8 @@ case "$test" in
     # LAN client: DHCP, DNS, NAT
     "$root/vm/client.sh" "$profile"
     client_login || fail "LAN client never reached a shell"
-    lease=
-    for _ in $(seq 30); do
-      lease=$(client_sh 20 "ip -4 -o addr show eth0 | awk '{print \$4}'" | grep -oE '^192\.168\.1\.[0-9]+' || true)
-      [[ -n "$lease" ]] && break
-      client_sh 60 'sudo ifdown eth0 >/dev/null 2>&1; sudo ifup eth0 >/dev/null 2>&1' >/dev/null || true
-    done
+    client_sh 90 'ip link set eth0 up; udhcpc -i eth0 -n -q -t 10' | tail -5
+    lease=$(client_sh 20 "ip -4 -o addr show eth0 | awk '{print \$4}'" | grep -oE '^192\.168\.1\.[0-9]+' || true)
     [[ -n "$lease" ]] || fail "LAN client got no 192.168.1.x lease"
     op 'show dhcp server leases' | tee "$dir/leases.txt"
     grep -qi "$CLIENT_MAC" "$dir/leases.txt" || fail "lease for $CLIENT_MAC not in show dhcp server leases"
@@ -194,15 +217,16 @@ case "$test" in
     vsh 'head -40 /usr/share/vyos-pi/manifest.txt'
     ;;
   trial)
-    echo 3 >"$dir/reboot-after-minutes"
+    # Long enough for a boot under TCG (~7 minutes to a loaded config) plus the checks.
+    echo 12 >"$dir/reboot-after-minutes"
     boot_seeded "reboot-after-minutes=$dir/reboot-after-minutes"
-    vsh 'grep -q "rebooting in 3 minutes" /var/log/vyos-pi.log' || fail "boot hook did not schedule the reboot"
+    vsh 'grep -q "rebooting in 12 minutes" /var/log/vyos-pi.log' || fail "boot hook did not schedule the reboot"
     ok "reboot scheduled"
     for _ in $(seq 180); do
-      [[ "$(vsh 'grep -c "rebooting in 3 minutes" /var/log/vyos-pi.log' 2>/dev/null || true)" -ge 2 ]] && break
+      [[ "$(vsh 'grep -c "rebooting in 12 minutes" /var/log/vyos-pi.log' 2>/dev/null || true)" -ge 2 ]] && break
       sleep 10
     done
-    [[ "$(vsh 'grep -c "rebooting in 3 minutes" /var/log/vyos-pi.log')" -ge 2 ]] || fail "it never rebooted by itself"
+    [[ "$(vsh 'grep -c "rebooting in 12 minutes" /var/log/vyos-pi.log')" -ge 2 ]] || fail "it never rebooted by itself"
     vsh 'grep "reboot-after-minutes" /var/log/vyos-pi.log'
     ok "rebooted by itself and scheduled the next one"
     vsh 'sudo bash -c ". /usr/libexec/vyos-pi/common.sh; mount_esp; d=\$ESP_MNT/vyos-pi; ls -l \$d; grep -q \"stage boot\" \$d/diag-boot.txt && grep -q \"stage reboot\" \$d/diag-reboot.txt && grep -q \"^### ip addr\" \$d/diag-reboot.txt; r=\$?; umount_esp; exit \$r"' \
@@ -212,7 +236,7 @@ case "$test" in
   direct)
     [[ $profile == pi5 ]] || fail "direct boot is the Pi 5 path"
     [[ -f "$dir/vyos.qcow2" ]] || fail "run vm/test.sh image pi5 first"
-    "$root/vm/run.sh" --pi5 --headless --direct --image "$(cat "$dir/base")"
+    start_vm --direct --image "$(cat "$dir/base")" || fail "direct boot: no kernel"
     wait_ssh || fail "direct boot (kernel+initrd+cmdline.txt from the FAT partition) never came up"
     wait_ready || fail "vyos-router never became active"
     cmd=$(vsh 'cat /proc/cmdline')
@@ -227,7 +251,7 @@ case "$test" in
     iso=${3:-}
     [[ -f "$iso" ]] || fail "usage: vm/test.sh upgrade $profile ISO (another vyos-pi ISO, a different version)"
     [[ -f "$dir/vyos.qcow2" ]] || fail "run vm/test.sh image $profile first"
-    "$root/vm/run.sh" "--$profile" --headless --image "$(cat "$dir/base")"
+    start_vm --image "$(cat "$dir/base")" || fail "the VM never started a kernel"
     wait_ssh || fail "SSH never worked"
     wait_ready || fail "vyos-router never became active"
     before=$(vsh 'cat /proc/cmdline' | grep -oE 'vyos-union=/boot/[^ ]+' | cut -d/ -f3)
@@ -256,7 +280,7 @@ case "$test" in
       vsh "sudo /usr/libexec/vyos-pi/vyos-pi-bootsync --check" || fail "FAT partition boot files do not match $new"
       ok "vyos-pi-bootsync moved the Pi 5 boot files to $new"
       stop
-      "$root/vm/run.sh" --pi5 --headless --direct --image "$(cat "$dir/base")"
+      start_vm --direct --image "$(cat "$dir/base")" || fail "direct boot: no kernel"
       wait_ssh || fail "direct boot after the upgrade never came up"
       running=$(vsh 'cat /proc/cmdline' | grep -oE 'vyos-union=/boot/[^ ]+' | cut -d/ -f3)
       [[ "$running" == "$new" ]] || fail "direct boot started $running, expected $new"

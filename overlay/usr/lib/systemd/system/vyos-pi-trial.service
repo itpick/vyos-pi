@@ -1,0 +1,8 @@
+[Unit]
+Description=vyos-pi: reboot-after-minutes (safety net for remote installs)
+Documentation=https://github.com/itpick/vyos-pi#first-boot-settings
+
+[Service]
+Type=simple
+EnvironmentFile=/run/vyos-pi/trial.env
+ExecStart=/usr/libexec/vyos-pi/vyos-pi-trial ${TRIAL_SECONDS}
