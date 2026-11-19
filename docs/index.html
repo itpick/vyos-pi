@@ -3,6 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://itpick.github.io/vyos-pi/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="VyOS for Raspberry Pi">
+<meta property="og:title" content="VyOS for Raspberry Pi">
+<meta property="og:description" content="Unofficial flash-and-boot VyOS rolling arm64 images for the Raspberry Pi 4 and 5.">
+<meta property="og:url" content="https://itpick.github.io/vyos-pi/">
+<meta property="og:image" content="https://itpick.github.io/vyos-pi/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="VyOS for Raspberry Pi: flash-and-boot VyOS rolling images for Pi 4 and Pi 5">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="VyOS for Raspberry Pi">
+<meta name="twitter:description" content="Unofficial flash-and-boot VyOS rolling arm64 images for the Raspberry Pi 4 and 5.">
+<meta name="twitter:image" content="https://itpick.github.io/vyos-pi/og.png">
+<meta name="twitter:image:alt" content="VyOS for Raspberry Pi: flash-and-boot VyOS rolling images for Pi 4 and Pi 5">
+
 <title>VyOS for Raspberry Pi</title>
 <meta name="description" content="Unofficial flashable VyOS images for the Raspberry Pi 4 and 5.">
 <style>
@@ -112,25 +130,25 @@
   </div>
 
   <h3 id="pi5-numbers">Pi 5 measurements</h3>
-  <p>iperf3 between a wired 1&nbsp;GbE Mac and the router itself, 15&nbsp;s runs, on 2026-11-16. These measure the NIC, driver and CPU, <strong>not</strong> routing or NAT. Both boards are a Pi 5 with 16&nbsp;GB.</p>
+  <p>iperf3 between a wired 1&nbsp;GbE Mac and the router itself, 15&nbsp;s runs, on 2026-11-16 (sensr: 10&nbsp;s runs on 2026-11-18). These measure the NIC, driver and CPU, <strong>not</strong> routing or NAT. All are a Pi 5 with 16&nbsp;GB.</p>
   <div class="tbl"><table>
-    <tr><th>Mbit/s (TCP, 4 streams)</th><th>Pi 5 eth0, Ubuntu 24.04 <span class="fine">(same board, reference)</span></th><th>Pi 5 eth0, VyOS</th><th>OPNsense Pi 5, LAN on USB RTL8156</th></tr>
-    <tr><td>Into the router</td><td class="n">789</td><td class="n">727&ndash;739</td><td class="n">600&ndash;612</td></tr>
-    <tr><td>Out of the router</td><td class="n">924</td><td class="n">910&ndash;927</td><td class="n">931&ndash;932</td></tr>
-    <tr><td>Router CPU, average</td><td class="n">9&ndash;29%</td><td class="n">4&ndash;23%</td><td class="n">22&ndash;33%</td></tr>
+    <tr><th>Mbit/s (TCP, 4 streams)</th><th>Pi 5 eth0, Ubuntu 24.04 <span class="fine">(same board, reference)</span></th><th>Pi 5 eth0, VyOS</th><th>OPNsense Pi 5, LAN on USB RTL8156</th><th>sensr Pi 5, LAN on USB RTL8156 <span class="fine">(development trial)</span></th></tr>
+    <tr><td>Into the router</td><td class="n">789</td><td class="n">727&ndash;739</td><td class="n">600&ndash;612</td><td class="n">940</td></tr>
+    <tr><td>Out of the router</td><td class="n">924</td><td class="n">910&ndash;927</td><td class="n">931&ndash;932</td><td class="n">932</td></tr>
+    <tr><td>Router CPU, average</td><td class="n">9&ndash;29%</td><td class="n">4&ndash;23%</td><td class="n">22&ndash;33%</td><td class="n">&mdash; <span class="fine">not sampled</span></td></tr>
   </table></div>
-  <p class="fine">The Ubuntu column is Linux on the same board and port, run while pi5-1 was still on its SD-card Ubuntu; VyOS was run the same way once it booted. With 1 stream, VyOS took 789&ndash;818&nbsp;Mbit/s in and up to 911 out. The OPNsense box is a live router carrying household traffic. The USB 2.5&nbsp;GbE port on the VyOS board had no peer, so it is not tested yet. 940&nbsp;Mbit/s is the Mac's 1&nbsp;GbE limit.</p>
+  <p class="fine">The Ubuntu column is Linux on the same board and port, run while pi5-1 was still on its SD-card Ubuntu; VyOS was run the same way once it booted. With 1 stream, VyOS took 789&ndash;818&nbsp;Mbit/s in and up to 911 out. The OPNsense box is a live router carrying household traffic. The USB 2.5&nbsp;GbE port on the VyOS board had no peer, so it is not tested yet. The sensr column is its development trial on the same board, carrying its imported home-router config (Kea, Unbound, Suricata); both directions were at line rate with the Mac's 1&nbsp;GbE port as the ceiling. Forwarded through NAT to the internet, the same trial moved 436&nbsp;Mbit/s up and about 717&nbsp;Mbit/s down on the 1&nbsp;Gb/s AT&amp;T line. 940&nbsp;Mbit/s is the Mac's 1&nbsp;GbE limit.</p>
   <p class="fine">Method, every run and the raw data: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md">Pi 5 comparison</a>.</p>
 
   <h3 id="startup">Startup on a real Pi 5: time until traffic flows</h3>
   <div class="tbl"><table class="startup">
-    <tr><th>Real Pi 5 (16&nbsp;GB), from the reboot command</th><th>opnsense-pi</th><th>vyos-pi</th><th><a href="https://github.com/itpick/sensr/blob/main/docs/research/07-performance-evaluation.md">sensr</a> <span class="fine">(in development)</span></th></tr>
-    <tr><td>Kernel starts</td><td class="n">36&ndash;38 s</td><td class="n">14 s</td><td class="n">not yet on real hardware</td></tr>
-    <tr><td><strong>Traffic flowing</strong> <span class="fine">(network up)</span></td><td class="n"><strong>64&ndash;67 s</strong></td><td class="n"><strong>48 s</strong></td><td class="n">not yet on real hardware<br><span class="fine">on-device trial planned</span></td></tr>
-    <tr><td>SSH / UI ready</td><td class="n">65&ndash;68 s<br><span class="fine">web GUI</span></td><td class="n">47&ndash;48 s<br><span class="fine">SSH</span></td><td class="n">&mdash;</td></tr>
-    <tr><td>Fully ready</td><td class="n">81&ndash;85 s</td><td class="n">48&ndash;49 s</td><td class="n">&mdash;</td></tr>
+    <tr><th>Real Pi 5 (16&nbsp;GB), from the reboot command</th><th>opnsense-pi</th><th>vyos-pi</th><th><a href="https://github.com/itpick/sensr/blob/main/docs/research/07-performance-evaluation.md">sensr</a> <span class="fine">(development build, ran on a Pi 5)</span></th></tr>
+    <tr><td>Kernel starts</td><td class="n">36&ndash;38 s</td><td class="n">14 s</td><td class="n">&asymp;19 s <span class="fine">(derived)</span></td></tr>
+    <tr><td><strong>Traffic flowing</strong> <span class="fine">(network up)</span></td><td class="n"><strong>64&ndash;67 s</strong></td><td class="n"><strong>48 s</strong></td><td class="n"><strong>&asymp;34 s</strong></td></tr>
+    <tr><td>SSH / UI ready</td><td class="n">65&ndash;68 s<br><span class="fine">web GUI</span></td><td class="n">47&ndash;48 s<br><span class="fine">SSH</span></td><td class="n">43 s<br><span class="fine">SSH; UI assets not packaged yet</span></td></tr>
+    <tr><td>Fully ready</td><td class="n">81&ndash;85 s</td><td class="n">48&ndash;49 s</td><td class="n">&asymp;66 s</td></tr>
   </table></div>
-  <p class="fine">Timed from the reboot command, so shutdown, the Pi firmware and the boot loader come first (the "kernel starts" row): OPNsense boots through UEFI, VyOS straight from the Pi firmware. "Traffic flowing" is the LAN port up with an address; "fully ready" is OPNsense's last boot script or VyOS's config loaded. OPNsense from its own boot logs over 7 typical reboots (1&nbsp;s resolution); VyOS from 2 warm reboots, its journal plus a 1&nbsp;s external watcher. VyOS has no web UI, so its figure is SSH. Method and every run: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md#boot-time">Pi 5 comparison, boot time</a>.</p>
+  <p class="fine">Timed from the reboot command, so shutdown, the Pi firmware and the boot loader come first (the "kernel starts" row): OPNsense boots through UEFI, VyOS straight from the Pi firmware. "Traffic flowing" is the LAN port up with an address; "fully ready" is OPNsense's last boot script or VyOS's config loaded. OPNsense from its own boot logs over 7 typical reboots (1&nbsp;s resolution); VyOS from 2 warm reboots, its journal plus a 1&nbsp;s external watcher. VyOS has no web UI, so its figure is SSH. The sensr column is its development trial (pi5-1, imported home-router config): on the box, kernel 0.6&nbsp;s, initrd 4.7&nbsp;s and userspace 41.9&nbsp;s, LAN carrier 14.9&nbsp;s, SSH 24.0&nbsp;s after kernel start, and 43&nbsp;s from the reboot command to SSH by wall clock; the kernel/traffic/ready rows are that 43&nbsp;s less the kernel-to-SSH interval (&asymp;1&nbsp;s uncertainty). Method and every run: <a href="https://github.com/itpick/vyos-pi/blob/main/docs/comparison/pi5-iperf-vyos-vs-opnsense.md#boot-time">Pi 5 comparison, boot time</a>.</p>
   <details class="x86">
     <summary>x86 VM (relative only, not the Pi)</summary>
     <div class="tbl"><table class="startup">
